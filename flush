@@ -2,7 +2,5 @@
 
 while true; do
     time echo flush | nc finn 8010
-    sleep 30
+    sleep 86400
 done
-
-    
