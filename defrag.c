@@ -96,9 +96,10 @@ int defragment_word_block(char *word_block) {
 
 
 void defragment_instance_table(void) {
-  int i;
+  int i = 0;
   char *block;
   int nwords = 0;
+  int id = 1;
 
   new_instance_block_number = 1;
 
@@ -112,6 +113,11 @@ void defragment_instance_table(void) {
   write_from(new_instance_file, block, BLOCK_SIZE);
   free(block);
 
+  printf("Priming cache...");
+  while (id < current_instance_block_number && i++ < 1024*1024)
+    get_instance_block(id++);
+  printf("done\n");
+
   for (i = 0; i<WORD_SLOTS; i++) {
     if ((block = (char*)word_table[i]) != NULL) {
       nwords += defragment_word_block(block);
@@ -124,5 +130,60 @@ void defragment_instance_table(void) {
 
   flush();
 
+}
+
+typedef struct {
+  int new_id;
+  int orig_next;
+  int new_next;
+  int current_id;
+} instance_order;
+
+instance_order *find_instance_order(void) {
+  instance_order *instance_chain;
+  char *buffer = NULL;
+  int nblocks = 1024;
+  int i = 0;
+  int next;
+  int instance_file;
+
+  if ((instance_file = open64(index_file_name(INSTANCE_FILE),
+			      O_RDWR|O_CREAT, 0644)) == -1)
+    merror("Opening the instance file");
+
+  instance_chain = (instance_order*)cmalloc(current_instance_block_number
+					    * sizeof(instance_order));
+  buffer = cmalloc(nblocks * BLOCK_SIZE);
+
+  while (i < current_instance_block_number) {
+    if (! (i % nblocks)) 
+      read_block(instance_file, buffer, nblocks * BLOCK_SIZE);
+
+    next = (int)(buffer[(i % nblocks) * BLOCK_SIZE]);
+    if (next != 0)
+      instance_chain[i].orig_next = next;
+    i++;
+  }
+
+  return instance_chain;
+}
+
+void sort_instance_chain(instance_order *instance_chain) {
+  int i;
+  int new_id = 0;
+  instance_order *io;
+
+  for (i = 0; i<current_instance_block_number; i++) {
+    io = instance_chain+i;
+    if (io->new_id == 0) {
+      do {
+	io->new_id = new_id++;
+	if (io->orig_next != 0) {
+	  io->new_next = new_id;
+	  io = instance_chain + io->orig_next;
+	}
+      } while (io->orig_next != 0);
+    }
+  }
 }
 
