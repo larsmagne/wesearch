@@ -1036,22 +1036,23 @@ void search_details(int article_id, int goodness, int index) {
 
 
 /* Output the search results. */
-void print_search_results(search_result *sr, int nresults) {
+void print_search_results(search_result *sr, int nresults, FILE *fdp) {
   int i;
 
+  fprintf(fdp, "# Results: %d\n", nresults);
+
   for (i = 0; i<nresults; i++) {
-    printf("%d\t%s\t%d\t%d\t%s\t%s\t%s\n",
-	   sr->goodness,
-	   sr->group,
-	   sr->article,
-	   (unsigned int)sr->time,
-	   sr->author,
-	   sr->subject,
-	   sr->body);
+    fprintf(fdp, "%d\t%s\t%d\t%d\t%s\t%s\t%s\n",
+	    sr->goodness,
+	    sr->group,
+	    sr->article,
+	    (unsigned int)sr->time,
+	    sr->author,
+	    sr->subject,
+	    sr->body);
     sr++;
   }
 
-  printf("# Total results: %d\n", nresults);
 }
 
 
@@ -1070,7 +1071,7 @@ void sort_search_results(search_result *sr, int nresults) {
 
 /* The main search function.  It takes a list of words to search
    for. */
-search_result *mdb_search(char **expressions) {
+search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int ne = 0, i;
   char *exp;
   word_descriptor *wd;
@@ -1095,7 +1096,7 @@ search_result *mdb_search(char **expressions) {
     }
 
     if (stop_word_p(si->word)) {
-      printf("# Ignoring %s\n", si->word);
+      fprintf(fdp, "# Ignoring: %s\n", si->word);
     } else {
       if ((wd = lookup_word(si->word)) != NULL) {
 	si->word_id = wd->word_id;
@@ -1152,6 +1153,10 @@ search_result *mdb_search(char **expressions) {
 #if DEBUG      
       printf("Found a match: %d, goodness %d\n", max_article_id, goodness);
 #endif
+      if (nresults >= MAX_SEARCH_RESULTS) {
+	fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
+	break;
+      }
       search_details(max_article_id, goodness, nresults++);
     }
   }
@@ -1160,6 +1165,6 @@ search_result *mdb_search(char **expressions) {
   printf("Total results: %d\n", nresults);
 #endif
   sort_search_results(search_results, nresults);
-  print_search_results(search_results, nresults);
+  *nres = nresults;
   return search_results;
 }
