@@ -75,6 +75,7 @@ int main(int argc, char **argv) {
   }
 
   while (TRUE) {
+    nitems = 0;
     printf("Accepting...\n");
     wsd = accept(server_socket, (struct sockaddr*)&caddr, &addlen);
     peerlen = sizeof(struct sockaddr);
@@ -96,11 +97,12 @@ int main(int argc, char **argv) {
     expression[nitems] = NULL;
 
     for (i = 0; i<nitems; i++) {
-      printf("%d %s\n", i, expression[i]);
+      printf("%d '%s'\n", i, expression[i]);
     }
 
-    if (nitems < 2 && !strcmp(expression[0], "search")) {
-      search(expression + 1);
+    if (nitems > 1 && !strcmp(expression[0], "search")) {
+      printf("Searching...\n");
+      search(expression + 1, wsd);
     }
 
     fclose(client);
