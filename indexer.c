@@ -97,7 +97,9 @@ void index_word(char *word, int count, int article_id) {
   /* See if the word is in the word table.  If not, enter it. */
   if ((wd = lookup_word(word)) == NULL) {
     if ((total_unique_words++ % 1000) == 0) 
-      printf("Got %d words (%s)\n", total_unique_words-1, word);
+      printf("Got %d words (%s); %d single instance words\n", 
+	     total_unique_words-1, word,
+	     total_single_word_instances);
     wd = enter_word(word);
     if (wd == NULL) {
       printf("Can't find '%s' after entering it.\n", word);
