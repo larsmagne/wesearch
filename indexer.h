@@ -7,6 +7,7 @@ void index_directory(const char* dir_name);
 
 struct option long_options[] = {
   {"spool", 1, 0, 's'},
+  {"from-file", 1, 0, 'f'},
   {"help", 1, 0, 'h'},
   {0, 0, 0, 0}
 };
