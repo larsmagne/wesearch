@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+
+$from_file = $ARGV[0];
+open(FROM, $from_file) || die;
+
+$start = time();
+$files = 0;
+
+while (<FROM>) {
+    chop;
+    $message = "/mirror/var/spool/news/articles/$_";
+    if (open(MESSAGE, $message)) {
+	while (<MESSAGE>) {
+	    $a = $_;
+	}
+	close MESSAGE;
+    }
+    print $message, "\n";
+    $b = $a;
+    if (0) {
+	if (! (++$files % 1000)) {
+	    if (time()-$start) {
+		printf("%d per second\n", $files/(time()-$start));
+		$start = time();
+		$files = 0;
+	    }
+	}
+    }
+}
+
+print $b;
