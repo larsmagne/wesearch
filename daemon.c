@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
   int i;
   static int so_reuseaddr = TRUE;
   int dirn;
+  int nfiles_indexed = 0;
 
   dirn = parse_args(argc, argv);
 
@@ -134,9 +135,17 @@ int main(int argc, char **argv) {
       printf("%d '%s'\n", i, expression[i]);
     }
 
-    if (nitems > 1 && !strcmp(expression[0], "search")) {
-      printf("Searching...\n");
-      search(expression + 1, wsd);
+    if (nitems > 1) {
+      if (!strcmp(expression[0], "search")) {
+	printf("Searching...\n");
+	search(expression + 1, wsd);
+      } else if (!strcmp(expression[0], "index")) {
+	printf("Indexing...\n");
+	index_file(expression[1]);
+	if (! (nfiles_indexed++ % 100)) {
+	  soft_flush();
+	}
+      }
     }
 
     fclose(client);
