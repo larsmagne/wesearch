@@ -258,6 +258,8 @@ document* parse_file(const char *file_name) {
   GMimeMessage *msg = 0;
   struct stat stat_buf;
   const char *author, *subject;
+  time_t date;
+  int offset;
   int num_words = 0;
   int file;
 
@@ -287,6 +289,7 @@ document* parse_file(const char *file_name) {
     saved_body_length = 0;
     author = g_mime_message_get_sender(msg);
     subject = g_mime_message_get_subject(msg);
+    g_mime_message_get_date(msg, &date, &offset);
     if (author != NULL && subject != NULL) {
       if (author)
 	strncpy(doc.author, author, MAX_HEADER_LENGTH-1);
@@ -298,12 +301,12 @@ document* parse_file(const char *file_name) {
       else
 	*doc.subject = 0;
 
-      doc.time = stat_buf.st_mtime;
+      doc.time = date;
 
       g_mime_message_foreach_part(msg, partFound, (gpointer) &tallied_length);
 
       strcpy(doc.body, saved_body);
-      
+
       g_hash_table_foreach(table, add_word_to_table, (gpointer) &num_words);
       word_table[num_words].word = NULL;
       g_hash_table_destroy(table);
