@@ -47,14 +47,15 @@ typedef struct {
   int goodness;
 } search_result;
 
-#define MAX_SEARCH_RESULTS 10240
+#define MAX_SEARCH_RESULTS 512
 
 void read_group_table(void);
 void read_next_article_id(void);
 void read_word_table(void);
 void read_next_instance_block_number(void);
 void read_word_extension_table(void);
-search_result *mdb_search(char **expressions);
+search_result *mdb_search(char **expressions, FILE *fd, int *nres);
 void flush_instance_block(instance_block *ib);
+void print_search_results(search_result *sr, int nresults, FILE *fdp);
 
 #endif
