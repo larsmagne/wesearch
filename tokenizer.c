@@ -112,7 +112,7 @@ int count_word(const char* word) {
 int word_ignore(unsigned char *beg, unsigned char *end) {
   unsigned char *num_check;
   int length = end - beg;
-  int num_digits = 0;
+  // int num_digits = 0;
   int has_ascii_p = 0;
   
   if (length < MIN_WORD_LENGTH ||
