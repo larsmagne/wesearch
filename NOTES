@@ -1,18 +1,25 @@
-There are two components: Berkeley DB, which is used for general
-storage, but doesn't have any information about which word appears in
-what article.
+The concept here is basically one traditional hash-based data base
+(like Berkeley DB, but tailored towards our needs).  In this base, we
+store words.  Each word has a link to the second item:
 
-Then there's a huge whopping file that contains word instance blocks.
+A huge whopping file that contains word instance blocks.
 
 Here are the details:
 
-Three bdb tables.
+The word table:
+  word varchar		Word string
+  word_id int		Unique identifier
+  head int		Head block
+  tail *int		Tail block
 
-group:
+The group table, stored in a simple text file, and read into a glib
+hash table:
   group varchar		Group name
   group_id int		Unique identifier
 
-article:
+The article "table", which is basically just a block-based file
+containing details for each article, which is used when displaying
+search results.
   group_id int		Group indentifier
   article int		Article number in that group
   article_id int	Unique identifier
@@ -21,48 +28,38 @@ article:
   time int
   body varchar		A couple of lines of text from the body
 
-word:
-  word varchar		Word string
-  word_id int		Unique identifier
-  head int		Head block
-  tail int		Tail block
 
 The indexer gets a (group, article) pair to add to the index.  It
 looks the group up in the GROUP table, and if it doesn't exist, it
 adds a new GROUP row.
 
-Given this group_id, opens the file, extracts the subject, author,
+Given this group_id, it opens the file, extracts the subject, author,
 time and a section from the body (perhaps the first non-quoted text)
 and inserts this in the ARTICLE table.  We now have an article_id.
 
-In addition to the bdb, we have a file consisting of blocks of word
-instances.  Each block would be a round size -- for instance, 1K.  The
-structure of the entries is as follows:
+In addition to the word hash, we have a file consisting of blocks of
+word instances.  Each block would be a round size -- for instance, 1K.
+The structure of the entries is as follows:
 
-article_id: 32 bits
-count:       8 bits	This is the number of times the word
+article_id: 28 bits
+count:       4 bits	This is the number of times the word
                         appears in this article.  This is so that
 			we can do rankings by relevance.
-group_id:   24 bits     This is the group id, which you might think
-                        is superfluous given that we have the article
-			id.  It's just there to be able to perform
-			searches restricted to a group really fast,
-			without going via the ARTICLE table.
+                        Only 17 times max per article.
 
-That's 8 bytes for each word per article.  The idea here is that we
+That's 4 bytes for each word per article.  The idea here is that we
 can look up a word in the WORD table, get the head block index, and
 then (basically) fseek to that block in the word instance file.  We
-can then go through the instances.  If there's a match-by-group in
-place, we disregard each instance that has a group_id that doesn't
-match the given group.
+can then go through the instances.  
 
 These word instance files are linked lists of blocks.  The first 4
 bytes of each block has the index of the next block for the same word.
 If it's the last block, the first 4 bytes are zero.  
 
 If we're searching for several words, then we'll be going through
-several of these lists concurrently.  Since they are sorted, we can
-pick out all the matches in linear time.
+several of these lists concurrently.  Since they are sorted (which
+they are automatically since that's how the data base is built), we
+can pick out all the matches in linear time.
 
 Back to the indexer insertion algorithm:
 
@@ -81,18 +78,20 @@ Then, for each unique word in the article, do the following:
   3) If head/tail in the WORD table needs updating, we do that.
 
 So we have a pretty huge word instance file on disk.  It'll probably
-be tens of megabytes big.  We can't have all that in memory at the
+be tens of gigabytes big.  We can't have all that in memory at the
 same time, so we have a buffer structure in memory.  If we allow
 ourselves to use 512MB, then we can have blocks for 500K words in
 memory at the same time, which sounds like it should be enough.
 
-The in-memory buffering could be arranged as follows:
+The in-memory buffering is arranged as follows:
 
 struct buffer_header {
+  int block_id;
   bool dirty_p;
   bool free_p;
   int word_id;
   time_t last_used;
+  char *block;
 }
 
 buffer buffer_headers[512000];
@@ -106,7 +105,7 @@ says how to find the buffer.
 
 Let's say we get the word "linux".
 
-We first selects word_id and tail from the WORDS table.  We check
+We first select word_id and tail from the WORDS table.  We check
 whether word_buffers[word_id] is non-zero.  If so, we've now have an
 index -- say, 132.  We set buffer_headers[index].time_t to the current
 time, and sets the dirty_p flag.
@@ -135,19 +134,13 @@ done by a simple sequential table traversal, probably.
 Words longer than, say, 32 characters should be ignored, since they're
 probably just uuencoded lines or something.
 
-This system is limited by the size of the RAM.  For instance, if there
-are 10M words in the base, word_buffers[] is going to be 40M big.  If
-this turns out to be a problem, I'm sure some kind of hashing can be
-used instead of a plain table.
-
 When searching, we might have that we want the word "linux" and the
 word "crash", and the group is "gmane.linux.kernel".  So we look up
-the group_id in the GROUP table, and the head for the two words in
-WORDS.  We then go through, in a loop, the two linked lists for the
-two words, and keep the entries that are from the right group, and
-have both of the required words.  article_id will be monotonically
-increasing in both these lists, so no sorting is required to pick out
-the articles that have both matching words.
+the head for the three words in WORDS.  We then go through, in a loop,
+the three linked lists for the three words, and keep the entries that
+have all of the required words.  article_id will be monotonically
+increasing in all these lists, so no sorting is required to pick out
+the articles that have all matching words.
 
 We then end up with a list of words that have both words and are from
 the required group.  We can then rank them by the "count" entries, or
@@ -157,7 +150,3 @@ that have a matching author.  The list should be so reduced by this
 stage that straight-forward regexp/substring matching is probably
 sufficient.
 
-We can actually look up words by substring as well, by looping over
-substring matches in the bdb.  In that case, it's probably a good idea
-
-to have a limit on the maximum number of matches allowed...
