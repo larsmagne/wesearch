@@ -28,7 +28,7 @@
 
 /* The number of word slots.  Must be a power of two.  This is the
    main factor in determining the size of the memory usage. */
-#define WORD_SLOTS 1048576
+#define WORD_SLOTS 262144
 
 /* The maximum number of extension slots.  If you need more of them,
    add them. */
