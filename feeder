@@ -1,33 +1,50 @@
 #!/usr/bin/perl
 
-#open (TAIL, "tail -q -f /tmp/copied /tmp/m2n.error.log|") || die;
-open (TAIL, "/tmp/newcopied") || die;
+open (LAST, "tail -n 100000 /mnt/index/we-11/indexed_files.db|") || die;
+while (<LAST>) {
+    chop;
+    s/\./\//g;
+    $lasts{"/var/spool/news/articles/$_"} = 1;
+}
+close LAST;
+
+open (TAIL, "tail -n 100000 -f /tmp/history|") || die;
+
+$found = 0;
 
 while (<TAIL>) {
     chop;
-    print $file, "\n";
-    next if /spam/;
-    next if /gmane.config/;
-    next unless /.*(\/var\/spool\/news\/articles\/.*)$/;
-    $ofile = $1;
-    $file = "/mirror$ofile";
-    $odir = $ofile;
-    $odir =~ s/[0-9]+$//;
-    next if -e "${odir}.noindex";
-    if (-e $file) {
-	if (open (FILE, $file)) {
-	    $spam = 0;
-	    while (<FILE>) {
-		chop;
-		$spam = 1 if /^Xref.*gmane.spam.detected/i;
-		$spam = 1 if /^x-no-archive:/i;
-		$spam = 1 if /^x-archive:/i;
-		last if /^$/;
-	    }
-	    close FILE;
-	    if (! $spam) {
-		print "Indexable.\n";
-		#system("echo 'index $file' | nc localhost 8010 2>&1 >>/tmp/index.log");
+    ($time, $file) = split;
+    if (! $found && $lasts{$file}) {
+	$found = 1;
+    }
+    if ($found && ! $lasts{$file}) {
+	next if $file =~ /spam/;
+	next if $file =~ /gmane.config/;
+	next unless $file =~ /^.var.spool.news.articles.gmane\/.*$/;
+	$file = "$file";
+	print "$_\n";
+	$odir = $file;
+	$odir =~ s/[0-9]+$//;
+	next if -e "${odir}.noindex";
+	if (-e $file) {
+	    if (open (FILE, $file)) {
+		$spam = 0;
+		while (<FILE>) {
+		    chop;
+		    $spam = 1 if /^Xref.*gmane.spam.detected/i;
+		    $spam = 1 if /^x-no-archive:/i;
+		    $spam = 1 if /^x-archive:/i;
+		    last if /^$/;
+		}
+		close FILE;
+		if (! $spam) {
+		    print "Indexable.\n";
+		    system("echo 'index $file' | nc finn 8010 2>&1 >>/tmp/index.log");
+		    if (! ($nii++ % 100)) {
+			sleep(1);
+		    }
+		}
 	    }
 	}
     }
