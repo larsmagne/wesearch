@@ -39,7 +39,7 @@ static int instance_file = 0;
 static int word_extension_file = 0;
 static int article_file = 0;
 static int word_file = 0;
-static int current_article_id = 1;
+static unsigned int current_article_id = 1;
 static int current_group_id = 1;
 static GHashTable *group_table = NULL;
 static char *reverse_group_table[MAX_GROUPS];
@@ -227,6 +227,7 @@ void read_into(int fd, int block_id, char *block, int block_size) {
 int instance_block_used_entries(char *b) {
   int n = 0;
   int *block = (int*)b;
+  int length = BLOCK_SIZE / sizeof(int) - 1;
 
   /* Skip past the header. */
   block += 1;
@@ -234,9 +235,9 @@ int instance_block_used_entries(char *b) {
   /* If the first byte of the instance is zero, then we have reached
      the end of the block.  We always extend the block if it's full,
      so there's no danger of segfaulting here without checking against
-     INSTANCE_HEADER_BLOCK_SIZE. */
+     INSTANCE_BLOCK_HEADER_SIZE. */
 
-  while (block[n]) 
+  while (block[n] && n < length) 
     n++;
 
   return n;
@@ -643,7 +644,7 @@ void mdb_init(void) {
   }
   */
 
-  if ((article_file = open(index_file_name(ARTICLE_FILE),
+  if ((article_file = open64(index_file_name(ARTICLE_FILE),
 			   O_RDWR|O_CREAT, 0644)) == -1)
     merror("Opening the article file");
 
@@ -866,10 +867,10 @@ void read_group_table(void) {
 /* Find out what the next article_id is supposed to be by looking at
    the size of the article file. */
 void read_next_article_id(void) {
-  struct stat stat_buf;
-  int size;
+  struct stat64 stat_buf;
+  unsigned int size;
   
-  if (fstat(article_file, &stat_buf) == -1)
+  if (fstat64(article_file, &stat_buf) == -1)
     merror("Statting the article file");
 
   size = stat_buf.st_size;
@@ -880,7 +881,7 @@ void read_next_article_id(void) {
     exit(1);
   }
 
-  current_article_id = size / ARTICLE_SIZE;
+  current_article_id = (unsigned int)(size / ARTICLE_SIZE);
 }
 
 
