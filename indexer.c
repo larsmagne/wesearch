@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <signal.h>
 #if defined(__FreeBSD__)
 #  include <sys/mman.h>
 #endif
@@ -18,10 +19,12 @@
 #include <errno.h>
 #include <time.h>
 
+static int from_stdin = 0;
+
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hds:f:i:", long_options, &option_index);
+    c = getopt_long(argc, argv, "h0ds:f:i:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -40,6 +43,10 @@ int parse_args(int argc, char **argv) {
       
     case 'f':
       from_file = optarg;
+      break;
+      
+    case '0':
+      from_stdin = 1;
       break;
       
     case 'h':
@@ -92,7 +99,7 @@ void index_from_file(char *from_file) {
       if (elapsed != 0) {
 	last_elapsed = now-last_start_time;
 	printf("    %d files (%d/s; %d/s last %d seconds)\n",
-	       total_files, 
+	       total_files - 1, 
 	       (int)(total_files/elapsed),
 	       (last_elapsed?
 		(int)((total_files-last_total_files) / last_elapsed):
@@ -110,6 +117,55 @@ void index_from_file(char *from_file) {
 
 }
 
+void index_from_stdin(void) {
+  FILE *fp;
+  char file[MAX_FILE_NAME];
+  time_t elapsed, last_elapsed, now;
+  char *str;
+
+  fp = fdopen(0, "r");
+
+  while (fgets(file, MAX_FILE_NAME, fp)) {
+    if (! *file)
+      break;
+
+    if ((str = index(file, '\n')) != NULL)
+      *str = 0;
+    
+    index_file(file);
+
+    if (! (total_files++ % 1000)) {
+      now = time(NULL);
+      elapsed = now-start_time;
+      if (last_start_time == 0) {
+	last_start_time = start_time;
+      }
+      if (elapsed != 0) {
+	last_elapsed = now-last_start_time;
+	printf("    %d files (%d/s; %d/s last %d seconds)\n",
+	       total_files - 1, 
+	       (int)(total_files/elapsed),
+	       (last_elapsed?
+		(int)((total_files-last_total_files) / last_elapsed):
+		0),
+	       (int)last_elapsed);
+	last_start_time = now;
+	last_total_files = total_files;
+	printf("    %d instances (%d per second)\n",
+	       instances, (int)(instances/elapsed));
+      }
+    }
+  }
+}
+
+void closedown(int i) {
+ time_t now = time(NULL);
+ printf("Closed down at %s", ctime(&now));
+ flush();
+ flush_indexed_file();
+ exit(0);
+}
+
 int main(int argc, char **argv)
 {
   int dirn;
@@ -119,6 +175,17 @@ int main(int argc, char **argv)
   dirn = parse_args(argc, argv);
   
   start_time = time(NULL);
+  is_indexing_p = 1;
+
+  if (signal(SIGHUP, closedown) == SIG_ERR) {
+    perror("Signal");
+    exit(1);
+  }
+
+  if (signal(SIGINT, closedown) == SIG_ERR) {
+    perror("Signal");
+    exit(1);
+  }
 
   /* Initialize key/data structures. */
   tokenizer_init();
@@ -127,6 +194,8 @@ int main(int argc, char **argv)
 
   if (from_file != NULL) {
     index_from_file(from_file);
+  } else if (from_stdin != 0) {
+    index_from_stdin();
   } else {
     for ( ; dirn < argc; dirn++) {
       
