@@ -95,7 +95,7 @@ void index_word(char *word, int count, int article_id) {
 
   /* See if the word is in the word table.  If not, enter it. */
   if ((wd = lookup_word(word)) == NULL) {
-    if ((total_unique_words++ % 1) == 0) 
+    if ((total_unique_words++ % 1000) == 0) 
       printf("Got %d words (%s)\n", total_unique_words-1, word);
     wd = enter_word(word);
     if (wd == NULL) {
@@ -123,7 +123,7 @@ int index_file(const char *file_name) {
     /* We ignore documents that have more than MAX_DISTINCT_WORDS.  They
        are probably bogus. */
     if (doc != NULL && doc->num_words <= MAX_DISTINCT_WORDS) {
-      enter_article(doc, group, article);
+      article_id = enter_article(doc, group, article);
       words = doc->words;
       while (words->word) {
 	count = words->count;
