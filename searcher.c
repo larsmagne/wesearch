@@ -24,13 +24,17 @@ static int do_defragment = 0;
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hsdi:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hsdi:b:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
     case 'i':
       index_dir = optarg;
+      break;
+      
+    case 'b':
+      instance_buffer_size = atoi(optarg);
       break;
       
     case 's':
