@@ -6,6 +6,7 @@
 #define BLOCK_HEADER_SIZE 8
 #define INSTANCE_BLOCK_HEADER_SIZE 4
 #define MAX_GROUP_NAME_LENGTH 1024
+#define MAX_SEARCH_ITEMS 1024
 
 typedef struct {
   const char *word;
@@ -36,10 +37,24 @@ int is_number(const char *string);
 
 #define ARTICLE_SIZE (MAX_SAVED_BODY_LENGTH + MAX_HEADER_LENGTH*2 + 4 + 4 + 4)
 
+typedef struct {
+  char *group;
+  int article;
+  char author[MAX_HEADER_LENGTH];
+  char subject[MAX_HEADER_LENGTH];
+  char body[MAX_SAVED_BODY_LENGTH];
+  time_t time;
+  int goodness;
+} search_result;
+
+#define MAX_SEARCH_RESULTS 10240
+
 void read_group_table(void);
 void read_next_article_id(void);
 void read_word_table(void);
 void read_next_instance_block_number(void);
 void read_word_extension_table(void);
+search_result *mdb_search(char **expressions);
+void flush_instance_block(instance_block *ib);
 
 #endif
