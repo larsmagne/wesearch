@@ -26,7 +26,12 @@
 #define MAX_WORDS_PER_DOCUMENT 32768
 
 /* Only this many characters from a header are considered. */
-#define MAX_HEADER_LENGTH 1024
+#define MAX_HEADER_LENGTH 80
+
+/* How many bytes of text from the body that will be saved in the data
+   base.  This is used for making pretty search results that displays
+   a section of the matching article. */
+#define MAX_SAVED_BODY_LENGTH 340
 
 typedef struct {
   char *word;
@@ -36,7 +41,9 @@ typedef struct {
 typedef struct {
   char author[MAX_HEADER_LENGTH];
   char subject[MAX_HEADER_LENGTH];
+  char body[MAX_SAVED_BODY_LENGTH];
   time_t time;
+  int num_words;
   word_count *words;
 } document;
 
