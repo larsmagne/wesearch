@@ -31,6 +31,12 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+#if defined(__FreeBSD__)
+#define FSYNC(fd) fsync(fd)
+#else
+#define FSYNC(fd) fdatasync(fd)
+#endif
+
 #define DEBUG 0
 
 unsigned char *downcase_rule[] =
@@ -366,7 +372,6 @@ document* parse_file(const char *file_name) {
       g_mime_object_unref(GMIME_OBJECT(msg));
     }
   }
-  fdatasync(file);
   close(file);
   doc.words = dword_table;
   doc.num_words = num_words;
