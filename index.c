@@ -19,7 +19,6 @@ int instances = 0;
 int total_unique_words = 0;
 int total_files = 0;
 time_t start_time = 0;
-char *news_spool = NEWS_SPOOL;
 char *from_file = NULL;
 static GHashTable *indexed_files = NULL;
 int suppress_duplicate_files = 0;
@@ -85,56 +84,9 @@ void index_article(const char* group, int article) {
   index_file(file_name);
 }
 
-/* Convert a file name into a group/article spec. */
-int path_to_article_spec(const char *file_name, char *group, int *article) {
-  char *s = news_spool;
-  char *last_slash = NULL;
-  char c;
-  int art = 0;
-
-  while (*s && *file_name && *s++ == *file_name++)
-    ;
-
-  if (*s || ! *file_name)
-    return 0;
-
-  /* It's common to forget to end the spool dir variable with a
-     trailing slash, so we check for that here, and just ignore a
-     leading slash in a group name. */
-  if (*file_name == '/')
-    file_name++;
-
-  while ((c = *file_name++) != 0) {
-    if (c == '/') {
-      c = '.';
-      last_slash = group;
-    }
-
-    *group++ = c;
-  }
-
-  *group++ = 0;
-
-  if (! last_slash)
-    return 0;
-
-  *last_slash = 0;
-
-  s = last_slash + 1;
-  while ((c = *s++) != 0) {
-    if ((c < '0') || (c > '9'))
-      return 0;
-    art = art * 10 + c - '0';
-  }
-
-  *article = art;
-
-  return 1;
-}
-
 void index_word(char *word, int count, int article_id) {
   word_descriptor *wd;
-  
+
   /* printf("%s\n", word); */
 
   /* See if the word is in the word table.  If not, enter it. */
@@ -154,6 +106,17 @@ void index_word(char *word, int count, int article_id) {
   enter_instance(article_id, wd, count);
 }
   
+void just_read_file (const char *file_name) {
+  int file, b, total = 0;
+  char *buffer[4096];
+
+  if ((file = open(file_name, O_RDONLY|O_STREAMING)) != -1) {
+    while ((b = read(file, buffer, 4096)) > 0) {
+      total += b;
+    }
+    close(file);
+  }
+}
 
 int index_file(const char *file_name) {
   document *doc;
@@ -163,8 +126,13 @@ int index_file(const char *file_name) {
   char group[MAX_FILE_NAME];
   int article_id = 0;
 
-  printf("%s\n", file_name); 
+  /* printf("%s\n", file_name);  */
   if (path_to_article_spec(file_name, group, &article)) {
+
+    /*
+      just_read_file(file_name);
+      return 0;
+    */
 
     doc = parse_file(file_name);
     log_indexed_file(group, article);
