@@ -34,10 +34,10 @@ if test "$GMIME" = ""; then
    exit 1
 fi
 	
-AC_CHECK_LIB(inn, parsedate, INN="-linn")
-if test "$INN" = ""; then
-   echo "No INN library found."
-   exit 1
-fi
+#AC_CHECK_LIB(inn, parsedate, INN="-linn")
+#if test "$INN" = ""; then
+#   echo "No INN library found."
+#   exit 1
+#fi
 	
 AC_OUTPUT(Makefile)
