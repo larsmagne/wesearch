@@ -14,6 +14,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#if defined(__FreeBSD__)
+#  define INSTANCES_DB_TMP "/var/tmp/instances.db.tmp"
+#else
+#  define INSTANCES_DB_TMP "/opt/tmp/instances.db.tmp"
+#endif
+
 /* De-fragment the instance table. */
 
 static int new_instance_block_number = 1;
@@ -103,7 +109,7 @@ void defragment_instance_table(void) {
 
   new_instance_block_number = 1;
 
-  if ((new_instance_file = open64("/opt/tmp/instances.db.tmp",
+  if ((new_instance_file = open64(INSTANCES_DB_TMP,
 				  O_RDWR|O_CREAT|O_TRUNC, 0644)) == -1)
     merror("Opening the instance file");
 
@@ -113,10 +119,12 @@ void defragment_instance_table(void) {
   write_from(new_instance_file, block, BLOCK_SIZE);
   free(block);
 
+  /*
   printf("Priming cache...\n");
   while (id < current_instance_block_number && i++ < 1024*512)
     get_instance_block(id++);
   printf("done\n");
+  */
 
   for (i = 0; i<WORD_SLOTS; i++) {
     if ((block = (char*)word_table[i]) != NULL) {
