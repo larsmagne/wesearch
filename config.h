@@ -45,7 +45,7 @@
 
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
-#define INSTANCE_BUFFER_SIZE (1024*1024)
+#define INSTANCE_BUFFER_SIZE (1024*1024*2)
 
 /* This variable says how many distinct words per document we should
    accept.  Articles with a whole lot of distinct words are usually
