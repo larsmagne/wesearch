@@ -37,6 +37,8 @@ typedef struct {
   char address[MAX_HEADER_LENGTH];
   char subject[MAX_HEADER_LENGTH];
   char body[MAX_SAVED_BODY_LENGTH];
+  char group[MAX_SAVED_BODY_LENGTH];
+  int article;
   time_t time;
   int num_words;
   word_count *words;
@@ -45,5 +47,6 @@ typedef struct {
 document* parse_file(const char *file_name);
 void tokenizer_init(void);
 int stop_word_p(const char *word);
+char *print_stop(void);
 
 #endif
