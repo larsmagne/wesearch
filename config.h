@@ -28,7 +28,7 @@
 
 /* The number of word slots.  Must be a power of two.  This is the
    main factor in determining the size of the memory usage. */
-#define WORD_SLOTS 262144
+#define WORD_SLOTS 524288
 
 /* The maximum number of extension slots.  If you need more of them,
    add them. */
@@ -39,11 +39,11 @@
 
 /* The maximum number of instance blocks.  This is kept on disk, and
    should be set to something that is big enough for your data set. */
-#define INSTANCE_TABLE_SIZE (1024*1024)
+#define INSTANCE_TABLE_SIZE (1024*2048)
 
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
-#define INSTANCE_BUFFER_SIZE (1024*100)
+#define INSTANCE_BUFFER_SIZE (1024*1024)
 
 /* This variable says how many distinct words per document we should
    accept.  Articles with a whole lot of distinct words are usually
