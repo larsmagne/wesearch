@@ -165,7 +165,8 @@ void save_body_bits(const char *text, int start, int end) {
 }
 
 /* Count unique words */
-int tally(const gchar* itext, int start, int end, int tallied_length) {
+int tally(const gchar* itext, int start, int end, int tallied_length,
+	  int remove_ids) {
   unsigned char c;
   unsigned char *word = bufp;
   int i;
@@ -176,14 +177,16 @@ int tally(const gchar* itext, int start, int end, int tallied_length) {
   
   /* Remove all text before @ signs.  These are most likely Message-IDs
      and just pollute the word table. */
-  for (i = end-1; i >= start; i--) {
-    if ((c = text[i]) == '@') {
-      blank = 1;
-    } else if (blank == 1) {
-      if (c == '<' || c == ' ' || c == '\n') 
-	blank = 0;
-      else 
-	text[i] = ' ';
+  if (remove_ids) {
+    for (i = end-1; i >= start; i--) {
+      if ((c = text[i]) == '@') {
+	blank = 1;
+      } else if (blank == 1) {
+	if (c == '<' || c == ' ' || c == '\n') 
+	  blank = 0;
+	else 
+	  text[i] = ' ';
+      }
     }
   }
 
@@ -214,7 +217,7 @@ int tally(const gchar* itext, int start, int end, int tallied_length) {
 }
 
 int tally_string(const char *string, int tallied_length) {
-  return tally(string, 0, strlen(string), tallied_length);
+  return tally(string, 0, strlen(string), tallied_length, 0);
 }
 
 void partFound(GMimePart* part, gpointer tallied_length) {
@@ -230,7 +233,7 @@ void partFound(GMimePart* part, gpointer tallied_length) {
       strncasecmp(ct->type, textType, textTypeLen) == 0 ) {
     if (strncasecmp(ct->subtype, plainSubType, plainSubTypeLen) == 0) {
       content = g_mime_part_get_content(part, &contentLen);
-      n += tally(content, 0, contentLen, n);
+      n += tally(content, 0, contentLen, n, 0);
     } else if (strncasecmp(ct->subtype, htmlSubType, htmlSubTypeLen) == 0) {
       gchar curChar = '\000';
       int beg = 0;
@@ -240,14 +243,14 @@ void partFound(GMimePart* part, gpointer tallied_length) {
 
 	if (curChar == '<') {
 	  if (i != beg) 
-	    n += tally(content, beg, i, n);
+	    n += tally(content, beg, i, n, 0);
 	}
 
 	if (curChar == '>') 
 	  beg = i+1;
       }
       if (i != beg) 
-	n += tally(content, beg, i, n);
+	n += tally(content, beg, i, n, 0);
     }
   }
   *((int*)tallied_length) = n;
