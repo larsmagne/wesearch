@@ -28,13 +28,15 @@ static int current_instance_block_number = 1;
 static int num_word_id = 1;
 static int next_free_buffer = 1;
 static int instance_file = 0;
+static int word_extension_file = 0;
 static int article_file = 0;
+static int word_file = 0;
 static int current_article_id = 1;
 static int current_group_id = 1;
 static GHashTable *group_table = NULL;
 
-void merror(void) {
-  perror("mainsearch");
+void merror(char *error) {
+  perror(error);
   exit(1);
 }
 
@@ -72,9 +74,18 @@ int allocate_instance_block(void) {
   if (ftruncate(instance_file,
 		(current_instance_block_number + 1) * BLOCK_SIZE)
       == -1) {
-    merror();
+    merror("Increasing the instance file size");
   }
   return current_instance_block_number;
+}
+
+/* Allocate a new, fresh word extension block. */
+int allocate_extension_block(void) {
+  if (ftruncate(word_extension_file,
+		(num_word_extension_blocks + 1) * BLOCK_SIZE) == -1) 
+    merror("Increasing the word extension file");
+  
+  return num_word_extension_blocks;
 }
 
 /* Find a free in-memory instance buffer. */
@@ -89,26 +100,29 @@ int get_free_instance_buffer(void) {
   return next_free_buffer;
 }
 
-/* Read a block from a file at a specified offset into a in-memory
-   block. */
-void read_into(int fd, int block_id, char *block, int block_size) {
+void read_block(int fd, char *block, int block_size) {
   int rn = 0, ret;
   
-  if (lseek(fd, block_id * block_size, SEEK_SET) == -1) {
-    merror();
-  }
-
   while (rn < block_size) {
     ret = read(fd, block + rn, block_size - rn);
     if (ret == 0) {
-      fprintf(stderr, "Reached end of file (block_id: %d, block_size: %d).\n",
-	      block_id, block_size);
+      fprintf(stderr, "Reached end of file (block_size: %d).\n", block_size);
       exit(1);
     } else if (ret == -1) 
-      merror();
+      merror("Reading a block");
       
     rn += ret;
   }
+}
+
+/* Read a block from a file at a specified offset into a in-memory
+   block. */
+void read_into(int fd, int block_id, char *block, int block_size) {
+  if (lseek(fd, block_id * block_size, SEEK_SET) == -1) {
+    merror("Seeking before reading a block");
+  }
+
+  read_block(fd, block, block_size);
 }
 
 /* Determine how many entries in an instance block are used. */
@@ -296,8 +310,8 @@ word_descriptor *block_search_word(const char *word, const char *word_block) {
       dword.tail = ((int*)b);
       b += 4;
 #if DEBUG
-      printf("Found %s, %d, %d, %d\n",
-	     dword.word, dword.word_id, dword.head, &dword.tail);
+      printf("Found %s, %d, %d, %x\n",
+	     dword.word, dword.word_id, dword.head, (int)&dword.tail);
 #endif
       return &dword;
     } else {
@@ -339,6 +353,15 @@ word_descriptor *lookup_word(const char *word) {
 /* Mark this word block as dirty. */
 void dirty_block(char *block) {
   *(block+6) = '1';
+}
+
+void clean_block(char *block) {
+  *(block+6) = 0;
+}
+
+/* Mark this word block as dirty. */
+int dirty_block_p(char *block) {
+  return *(block+6);
 }
 
 /* Get the position of the end of the entries in the word block. */
@@ -389,6 +412,7 @@ word_descriptor *enter_word(char *word) {
 
     bzero(new_block, BLOCK_SIZE);
 
+    allocate_extension_block();
     word_extension_table[num_word_extension_blocks] = new_block;
     *((int*)word_block) = num_word_extension_blocks++;
 
@@ -470,12 +494,28 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
 
 void mdb_init(void) {
   if ((instance_file = open(INSTANCE_FILE, O_RDWR|O_CREAT, 0644)) == -1)
-    merror();
+    merror("Opening the instance file");
 
   if ((article_file = open(ARTICLE_FILE, O_RDWR|O_CREAT, 0644)) == -1)
-    merror();
+    merror("Opening the article file");
+
+  if ((word_extension_file =
+       open(WORD_EXTENSION_FILE, O_RDWR|O_CREAT, 0644)) == -1)
+    merror("Opening the word extension file");
+
+  if ((word_file = open(WORD_FILE, O_RDWR|O_CREAT, 0644)) == -1)
+    merror("Opening the word file");
+
+  if (ftruncate(word_file, WORD_SLOTS * BLOCK_SIZE) == -1) 
+    merror("Truncating the word file");
 
   group_table = g_hash_table_new(g_str_hash, g_str_equal);
+  bzero(word_table, WORD_SLOTS * 4);
+  
+  read_next_article_id();
+  read_group_table();
+  read_word_table();
+  read_next_instance_block_number();
 }
 
 void mdb_report(void) {
@@ -509,7 +549,7 @@ int write_from(int fp, char *buf, int size) {
 
   while (written < size) {
     if ((w = write(fp, buf + written, size - written)) < 0)
-      merror();
+      merror("Writing a block");
 
     written += w;
   }
@@ -537,7 +577,7 @@ int enter_article(document *doc, char *group, int article) {
   return current_article_id;
 }
 
-void write_group_entry(gpointer key, gpointer value, gpointer user_data) {
+void flush_group_entry(gpointer key, gpointer value, gpointer user_data) {
   FILE *fp = (FILE *) user_data;
   char *group = (char*) key;
   int group_id = (int) value;
@@ -545,12 +585,154 @@ void write_group_entry(gpointer key, gpointer value, gpointer user_data) {
   fprintf(fp, "%s %d\n", group, group_id);
 }
 
-void write_group_table(void) {
+void flush_group_table(void) {
   FILE *fp;
   if ((fp = fopen(GROUP_FILE, "w")) == NULL)
-    merror();
+    merror("Opening the group file");
 
-  g_hash_table_foreach(group_table, write_group_entry, (gpointer)fp);
+  g_hash_table_foreach(group_table, flush_group_entry, (gpointer)fp);
 
   fclose(fp);
+}
+
+void flush_instance_block(instance_block *ib) {
+  if (lseek(instance_file, ib->block_id * BLOCK_SIZE, SEEK_SET) == -1) 
+    merror("Flushing an instance block");
+
+  write_from(instance_file, ib->block, BLOCK_SIZE);
+  ib->dirty = 0;
+}
+
+void flush_instance_table(void) {
+  int i;
+  instance_block *ib;
+  
+  for (i = 0; i<INSTANCE_TABLE_SIZE; i++) {
+    if (instance_table[i]) {
+      ib = &instance_buffer[instance_table[i]];
+      if (ib->dirty)
+	flush_instance_block(ib);
+    }
+  }
+}
+
+void flush_word_block(char *block, int block_number) {
+  if (lseek(word_file, block_number * BLOCK_SIZE, SEEK_SET) == -1) 
+    merror("Flushing a word block");
+
+  write_from(word_file, block, BLOCK_SIZE);
+  clean_block(block);
+}
+
+void flush_word_table(void) {
+  int i;
+  char *block;
+
+  for (i = 0; i<WORD_SLOTS; i++) {
+    if ((block = (char*)word_table[i]) != NULL) 
+      if (dirty_block_p(block)) 
+	flush_word_block(block, i);
+  }
+}
+
+void flush_word_extension_block(char *block, int block_number) {
+  if (lseek(word_extension_file, block_number * BLOCK_SIZE, SEEK_SET) == -1) 
+    merror("Flushing a word extension block");
+
+  write_from(word_extension_file, block, BLOCK_SIZE);
+  clean_block(block);
+}
+
+void flush_word_extension_table(void) {
+  int i;
+  char *block;
+
+  for (i = 0; i<num_word_extension_blocks; i++) {
+    if ((block = (char*)word_extension_table[i]) != NULL) 
+      if (dirty_block_p(block)) 
+	flush_word_extension_block(block, i);
+  }
+}
+
+void flush(void) {
+  flush_word_table();
+  flush_word_extension_table();
+  flush_instance_table();
+  flush_group_table();
+}
+
+void read_group_table(void) {
+  FILE *fp;
+  char group[MAX_GROUP_NAME_LENGTH], *g;
+  int group_id;
+  
+  if ((fp = fopen(GROUP_FILE, "r")) == NULL)
+    return;
+
+  while (fscanf(fp, "%s %d\n", group, &group_id) != EOF) {
+    g = (char*)malloc(strlen(group)+1);
+    strcpy(g, group);
+    printf("Got %s (%d)\n", g, group_id);
+    g_hash_table_insert(group_table, (gpointer)g, (gpointer)group_id);
+  }
+  fclose(fp);
+}
+
+void read_next_article_id(void) {
+  struct stat stat_buf;
+  int size;
+  
+  if (fstat(article_file, &stat_buf) == -1)
+    merror("Statting the article file");
+
+  size = stat_buf.st_size;
+
+  if ((size % ARTICLE_SIZE) != 0) {
+    printf("Invalid size for the article file (%d) for this article size (%d).\n",
+	   size, ARTICLE_SIZE);
+    exit(1);
+  }
+
+  current_article_id = size / ARTICLE_SIZE;
+}
+
+void read_next_instance_block_number(void) {
+  struct stat stat_buf;
+  int size;
+  
+  if (fstat(instance_file, &stat_buf) == -1)
+    merror("Statting the article file");
+
+  size = stat_buf.st_size;
+
+  if ((size % BLOCK_SIZE) != 0) {
+    printf("Invalid size for the instance file (%d) for this block size (%d).\n",
+	   size, BLOCK_SIZE);
+    exit(1);
+  }
+
+  current_instance_block_number = size / BLOCK_SIZE;
+}
+
+void read_word_table(void) {
+  char *block = NULL;
+  int i;
+    
+  lseek(word_file, 0, SEEK_SET);
+
+  for (i = 0; i<WORD_SLOTS; i++) {
+    if (block == NULL)
+      block = (char*)malloc(BLOCK_SIZE);
+
+    read_block(word_file, block, BLOCK_SIZE);
+    if (get_last_word((short*)block)) {
+      word_table[i] = block;
+      block = NULL;
+    } else
+      word_table[i] = NULL;
+
+  }
+
+  if (block)
+    free(block);
 }
