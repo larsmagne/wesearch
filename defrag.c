@@ -132,6 +132,10 @@ void defragment_instance_table(void) {
 
 }
 
+
+/* The following functions are the beginning of a reimplementation
+   of the entire thing, but they aren't used yet. */
+
 typedef struct {
   int new_id;
   int orig_next;
