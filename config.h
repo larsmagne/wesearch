@@ -39,7 +39,7 @@
 
 /* The maximum number of instance blocks.  This is kept on disk, and
    should be set to something that is big enough for your data set. */
-#define INSTANCE_TABLE_SIZE (1024*2048)
+#define INSTANCE_TABLE_SIZE (1024*1024*20)
 
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
@@ -49,6 +49,11 @@
    accept.  Articles with a whole lot of distinct words are usually
    not very interesting, and may well be bogus. */
 #define MAX_DISTINCT_WORDS 1000
+
+/* If you have a Linux with O_STREAMING, use the followin define. */
+#define O_STREAMING    04000000
+/* If not, uncomment the following. */
+/* #define O_STREAMING    0 */
 
 /* To determine how much memory that will be allocated, it's basically:
 
