@@ -74,5 +74,7 @@ extern void *word_table[];
 extern int ninstance_blocks_read;
 extern int current_instance_block_number;
 extern int speculative_readahead;
+extern int is_indexing_p;
+extern char *news_spool;
 
 #endif
