@@ -242,18 +242,6 @@ void swap_instance_block_in(int bn, int block_id) {
 }
 
 
-int speculative_readahead = 0;
-
-void get_more_instance_blocks(int id) {
-  int i = 0;
-
-  speculative_readahead = 0;
-  while (id < current_instance_block_number && i++ < 1024)
-    get_instance_block(id++);
-  speculative_readahead = 1;
-}
-
-
 /* Get an instance block. */
 instance_block *get_instance_block(int block_id) {
   int bn;
@@ -263,8 +251,6 @@ instance_block *get_instance_block(int block_id) {
     bn = get_free_instance_buffer();
     swap_instance_block_in(bn, block_id);
     instance_table[block_id] = bn;
-    if (speculative_readahead != 0)
-      get_more_instance_blocks(block_id);
   }
 
 #if DEBUG
@@ -359,7 +345,7 @@ char *allocate_word_block(const char *word) {
    this function isn't reentrant -- it returns a static
    word_descriptor.  The caller has to save the values itself if it
    wants to keep them. */
-word_descriptor *block_search_word(const char *word, const char *word_block) {
+word_descriptor *block_search_word(const char *word, char *word_block) {
   const char *b = word_block + BLOCK_HEADER_SIZE; /* Skip past the header. */
   const char *w;
   static word_descriptor dword;
@@ -399,6 +385,7 @@ word_descriptor *block_search_word(const char *word, const char *word_block) {
       b += 4;
       dword.tail = ((int*)b);
       b += 4;
+      dword.w_block = word_block;
 #if DEBUG
       printf("Found %s, %d, %d, %x\n",
 	     dword.word, dword.word_id, (int)&dword.head, (int)&dword.tail);
@@ -584,6 +571,11 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
     return;
   }
 
+  while (ib->num_used == INSTANCE_BLOCK_LENGTH) {
+    /* printf("Going to block %d\n", *(int*)(ib->block)); */ 
+    ib = get_instance_block(*(int*)(ib->block));
+  }
+
   /* Go to the end of the block. */
   block += INSTANCE_BLOCK_HEADER_SIZE;
   block += ib->num_used * 4;
@@ -607,6 +599,8 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
   ib->dirty = 1;
   ib->access_time = time(NULL);
 
+  /* printf("ib->num_used: %d\n", ib->num_used); */
+
   /* If we've now filled this block, we allocate a new one, and hook
      it onto the end of this chain. */
   if (ib->num_used == INSTANCE_BLOCK_LENGTH) {
@@ -614,6 +608,7 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
     block = ib->block;
     *((int*) block) = new_instance_block;
     *wd->tail = new_instance_block;
+    dirty_block(wd->w_block);
   }
 }
 
@@ -851,6 +846,10 @@ void read_group_table(void) {
 #endif
     g_hash_table_insert(group_table, (gpointer)g, (gpointer)group_id);
     reverse_group_table[group_id] = g;
+
+    if (group_id > current_group_id)
+      current_group_id = group_id;
+
   }
   fclose(fp);
 }
@@ -905,6 +904,8 @@ void read_word_table(void) {
 
     read_block(word_file, block, BLOCK_SIZE);
     if (get_last_word((short*)block)) {
+      /* This is a non-empty word block, so we store it in the
+         table. */
       word_table[i] = block;
       block = NULL;
     } else
