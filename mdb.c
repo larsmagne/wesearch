@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <time.h>
+#include <ctype.h>
 
 #define DEBUG 0
 
@@ -26,8 +27,11 @@ static int num_word_extension_blocks = 1;
 static int current_instance_block_number = 1;
 static int num_word_id = 1;
 static int next_free_buffer = 1;
-static instance_file = 0;
-
+static int instance_file = 0;
+static int article_file = 0;
+static int current_article_id = 1;
+static int current_group_id = 1;
+static GHashTable *group_table = NULL;
 
 void merror(void) {
   perror("mainsearch");
@@ -37,7 +41,7 @@ void merror(void) {
 /* A function used when debugging.  It dumps the contents of the
    specified word block. */
 void dump_word_block(char *block) {
-  printf("Address: %x\n", block);
+  printf("Address: %x\n", (unsigned int)block);
   printf(" Next: %d\n", *((int*)block));
   block += 4;
   printf(" Last: %d\n", *((short*)block));
@@ -119,7 +123,7 @@ int instance_block_used_entries(char *block) {
      so there's no danger of segfaulting here without checking against
      INSTANCE_HEADER_BLOCK_SIZE. */
 
-  while (block[n*6]) 
+  while (block[n*4]) 
     n++;
 
   return n;
@@ -173,9 +177,9 @@ instance_block *get_instance_block(int block_id) {
 }
 
 /* Various hashes used for hashing words. */
-int one_at_a_time_hash(const char *key, int len)
+unsigned int one_at_a_time_hash(const char *key, int len)
 {
-  int   hash, i;
+  unsigned int   hash, i;
   for (hash=0, i=0; i<len; ++i)
   {
     hash += key[i];
@@ -225,8 +229,9 @@ int naive_hash(const char *word, int len) {
 
 int hash(const char *word) {
   int length = strlen(word);
-  //hash8(word, length);
-  one_at_a_time_hash(word, length);
+  //return hash8(word, length);
+  //return naive_hash(word, length);
+  return one_at_a_time_hash(word, length);
 }
 
 /* malloc a word block a new, fresh word block. */
@@ -253,7 +258,6 @@ char *allocate_word_block(const char *word) {
 word_descriptor *block_search_word(const char *word, const char *word_block) {
   const char *b = word_block + BLOCK_HEADER_SIZE; /* Skip past the header. */
   const char *w;
-  int word_id, head, tail;
   static word_descriptor dword;
 
   while (TRUE) {
@@ -307,9 +311,9 @@ word_descriptor *block_search_word(const char *word, const char *word_block) {
 
 /* Find the word block for word.  */
 char *lookup_word_block(const char *word) {
-  int slot_number = hash(word);
+  unsigned int slot_number = hash(word);
 #if DEBUG
-  printf("Slot number %d.\n", slot_number);
+  printf("Slot number %d, %d.\n", slot_number, hash(word));
 #endif
   return word_table[slot_number];
 }
@@ -343,7 +347,7 @@ int get_last_word(short *block) {
 }
 
 /* Set the position of the end of the entries in the word block. */
-int set_last_word(short *block, short last) {
+void set_last_word(short *block, short last) {
   *(block+2) = last;
 }
 
@@ -397,7 +401,7 @@ word_descriptor *enter_word(char *word) {
   /* We now know we have room to write the word to the block. */
   b = word_block + BLOCK_HEADER_SIZE + last_word;
   
-  while (*b++ = *w++)
+  while ((*b++ = *w++) != 0)
     ;
   *((int*) b) = num_word_id++;
   b += 4;
@@ -426,28 +430,27 @@ int is_number(const char *string) {
 }
 
 /* Enter a word instance into the instance table. */
-void enter_instance(word_descriptor *wd, unsigned int count, int group_id) {
+void enter_instance(unsigned int article_id, word_descriptor *wd,
+		    unsigned int count) {
   instance_block *ib = get_instance_block(*wd->tail);
   char *block = ib->block;
   int num_used = ib->num_used;
-  unsigned int tmp = wd->word_id;
+  unsigned int tmp = article_id;
   int new_instance_block;
 
   /* Go to the end of the block. */
   block += INSTANCE_BLOCK_HEADER_SIZE;
-  block += num_used * 6;
+  block += num_used * 4;
 
 #if DEBUG
   printf("Skipping %d, %d\n",
-	 num_used * 6 + INSTANCE_BLOCK_HEADER_SIZE, num_used);
+	 num_used * 4 + INSTANCE_BLOCK_HEADER_SIZE, num_used);
 #endif
 
   /* Enter the data. */
   tmp &= (count << 28);
   *((int*) block) = tmp;
   block += 4;
-  *((short*) block) = group_id;
-  block += 2;
 
   /* Do accounting. */
   num_used++;
@@ -456,7 +459,7 @@ void enter_instance(word_descriptor *wd, unsigned int count, int group_id) {
 
   /* If we've now filled this block, we allocate a new one, and hook
      it onto the end of this chain. */
-  if (num_used++ == 170) {
+  if (num_used++ == 255) {
     new_instance_block = allocate_instance_block();
     block = ib->block;
     *((int*) block) = new_instance_block;
@@ -468,9 +471,86 @@ void enter_instance(word_descriptor *wd, unsigned int count, int group_id) {
 void mdb_init(void) {
   if ((instance_file = open(INSTANCE_FILE, O_RDWR|O_CREAT, 0644)) == -1)
     merror();
+
+  if ((article_file = open(ARTICLE_FILE, O_RDWR|O_CREAT, 0644)) == -1)
+    merror();
+
+  group_table = g_hash_table_new(g_str_hash, g_str_equal);
 }
 
 void mdb_report(void) {
   printf("Total number of extension blocks allocated: %d\n",
 	 num_word_extension_blocks);
+}
+
+char *mstrcpy(char *dest, char *src) {
+  while ((*dest++ = *src++) != 0)
+    ;
+  return dest;
+}
+
+int group_id(char *group) {
+  int gid;
+  char *g;
+  
+  if ((gid = (int)g_hash_table_lookup(group_table, (gpointer)group)) == 0) {
+    current_group_id++;
+    gid = current_group_id;
+    g = (char*)malloc(strlen(group)+1);
+    strcpy(g, group);
+    g_hash_table_insert(group_table, (gpointer)g, (gpointer)gid);
+  }
+  
+  return gid;
+}
+
+int write_from(int fp, char *buf, int size) {
+  int w = 0, written = 0;
+
+  while (written < size) {
+    if ((w = write(fp, buf + written, size - written)) < 0)
+      merror();
+
+    written += w;
+  }
+  return written;
+}
+
+int enter_article(document *doc, char *group, int article) {
+  char abuf[ARTICLE_SIZE];
+  char *b = abuf;
+  int gid = group_id(group);
+
+  bzero(abuf, ARTICLE_SIZE);
+  
+  *((int*)b++) = gid;
+  *((int*)b++) = article;
+  *((int*)b++) = doc->time;
+
+  b = mstrcpy(b, doc->author);
+  b = mstrcpy(b, doc->subject);
+  b = mstrcpy(b, doc->body);
+  
+  current_article_id++;
+  lseek(article_file, current_article_id * ARTICLE_SIZE, SEEK_SET);
+  write_from(article_file, abuf, ARTICLE_SIZE);
+  return current_article_id;
+}
+
+void write_group_entry(gpointer key, gpointer value, gpointer user_data) {
+  FILE *fp = (FILE *) user_data;
+  char *group = (char*) key;
+  int group_id = (int) value;
+
+  fprintf(fp, "%s %d\n", group, group_id);
+}
+
+void write_group_table(void) {
+  FILE *fp;
+  if ((fp = fopen(GROUP_FILE, "w")) == NULL)
+    merror();
+
+  g_hash_table_foreach(group_table, write_group_entry, (gpointer)fp);
+
+  fclose(fp);
 }
