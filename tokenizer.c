@@ -25,9 +25,10 @@
 #include "tokenizer.h"
 #include "config.h"
 #include "stop_words.h"
+#include "util.h"
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <ctype.h>
 #include <stdlib.h>
 
@@ -64,6 +65,11 @@ static GHashTable *stop_words_table = NULL;
 static word_count dword_table[MAX_WORDS_PER_DOCUMENT];
 static char saved_body[MAX_SAVED_BODY_LENGTH];
 static int saved_body_length = 0;
+
+char *print_stop(void) {
+  //printf("%x\n", stop_words_table);
+  return (char*) stop_words_table;
+}
 
 void populate_stop_words_table(char **words) {
   char *word;
@@ -119,23 +125,31 @@ int count_word(const char* word) {
 int word_ignore(unsigned char *beg, unsigned char *end) {
   unsigned char *num_check;
   int length = end - beg;
-  // int num_digits = 0;
+  int num_digits = 0;
   int has_ascii_p = 0;
+  int base64_p = 1;
   
   if (length < MIN_WORD_LENGTH ||
       length > MAX_WORD_LENGTH)
     return 1;
 
   for (num_check = beg; num_check<end; num_check++) {
-    /*
     if (isdigit(*num_check)) {
-      if (num_digits++ > 3)
+      if (num_digits++ > 4)
 	return 1;
-    } else 
-    */ 
-    if (*num_check < 128)
-      has_ascii_p = 1;
+    } else {
+      if (*num_check < 128)
+	has_ascii_p = 1;
+    }
+
+    if (! (isdigit(*num_check) ||
+	   (*num_check >= 'a' && *num_check <= 'f')))
+      base64_p = 0;
+
   }
+
+  if (base64_p)
+    return 1;
 
   if (has_ascii_p)
     return 0;
@@ -293,7 +307,7 @@ document* parse_file(const char *file_name) {
   GMimeStream *stream;
   GMimeMessage *msg = 0;
   // struct stat stat_buf;
-  const char *author, *subject;
+  const char *author, *subject, *xref, *xref_end;
   time_t date;
   int offset;
   int num_words = 0;
@@ -319,6 +333,10 @@ document* parse_file(const char *file_name) {
     return NULL;
   }
 
+#ifdef POSIX_FADV_NOREUSE
+  no_reuse(file);
+#endif
+
   stream = g_mime_stream_fs_new(file);
   msg = g_mime_parser_construct_message(stream);
   g_mime_stream_unref(stream);
@@ -331,36 +349,38 @@ document* parse_file(const char *file_name) {
     saved_body_length = 0;
     author = g_mime_message_get_sender(msg);
     subject = g_mime_message_get_subject(msg);
+    xref = g_mime_message_get_header(msg, "Xref");
     g_mime_message_get_date(msg, &date, &offset);
-    if (author != NULL && subject != NULL) {
-      if (author) {
-	tallied_length = tally_string(author, tallied_length);
-	strncpy(doc.author, author, MAX_HEADER_LENGTH-1);
+    if (author != NULL && subject != NULL && xref != NULL) {
+      tallied_length = tally_string(author, tallied_length);
+      strncpy(doc.author, author, MAX_HEADER_LENGTH-1);
 
-	/* Get the address from the From header. */
-	if ((iaddr_list = internet_address_parse_string(author)) != NULL) {
-	  iaddr = iaddr_list->address;
-	  internet_address_set_name(iaddr, NULL);
-	  address = internet_address_to_string(iaddr, FALSE);
-	  strncpy(doc.address, address, MAX_HEADER_LENGTH-1);
-	  downcase_string(doc.address);
-	  free(address);
-	  internet_address_list_destroy(iaddr_list);
-	} else {
-	  *doc.address = 0;
-	}
+      /* Get the address from the From header. */
+      if ((iaddr_list = internet_address_parse_string(author)) != NULL) {
+	iaddr = iaddr_list->address;
+	internet_address_set_name(iaddr, NULL);
+	address = internet_address_to_string(iaddr, FALSE);
+	strncpy(doc.address, address, MAX_HEADER_LENGTH-1);
+	downcase_string(doc.address);
+	free(address);
+	internet_address_list_destroy(iaddr_list);
       } else {
-	*doc.author = 0;
 	*doc.address = 0;
       }
 
-      if (subject) {
-	tallied_length = tally_string(subject, tallied_length);
-	strncpy(doc.subject, subject, MAX_HEADER_LENGTH-1);
-      } else
-	*doc.subject = 0;
+      tallied_length = tally_string(subject, tallied_length);
+      strncpy(doc.subject, subject, MAX_HEADER_LENGTH-1);
 
       doc.time = date;
+
+      if ((xref = strchr(xref, ' ')) != NULL) {
+	xref++;
+	xref_end = strchr(xref, ':');
+	*doc.group = 0;
+	strncat(doc.group, xref, min(xref_end-xref, MAX_HEADER_LENGTH-1));
+	xref_end++;
+	sscanf(xref_end, "%d", &doc.article);
+      }
 
       g_mime_message_foreach_part(msg, partFound, (gpointer) &tallied_length);
 
@@ -370,6 +390,9 @@ document* parse_file(const char *file_name) {
       dword_table[num_words].word = NULL;
       g_hash_table_destroy(table);
       g_mime_object_unref(GMIME_OBJECT(msg));
+    } else {
+      close(file);
+      return NULL;
     }
   }
   close(file);
