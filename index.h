@@ -8,6 +8,8 @@ void soft_flush(void);
 int index_file(const char *file_name);
 void indexer_init(void);
 void read_indexed_files_table(void);
+void flush_indexed_file(void);
+void index_word(char *word, int count, int article_id);
 
 extern int total_unique_words;
 extern int total_files;
