@@ -3,23 +3,30 @@ GLIB_CONFIG = @GLIB_CONFIG@
 GLIB_LIBS = @GLIB_LIBS@
 
 CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -O3 -Wall -I/usr/local/include
-LDFLAGS+=-L/usr/local/lib -L/usr/lib/news -lgmime -lglib -linn
+LDFLAGS+=-L/usr/local/lib -L/usr/lib/news -lgmime -lglib
 
-all: indexer we-search
+all: indexer we-search wed
 
 tokenizer.o: tokenizer.c tokenizer.h config.h
 
 mdb.o: mdb.c mdb.h config.h tokenizer.h config.h
 
+daemon.o: daemon.c mdb.h config.h tokenizer.h config.h
+
 indexer.o: indexer.c indexer.h tokenizer.h config.h
 
 searcher.o: searcher.c searcher.h config.h
 
+search.o: search.c search.h config.h
+
 indexer: indexer.o mdb.o tokenizer.o 
 	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o
 
-we-search: searcher.o mdb.o
-	gcc $(CPPFLAGS) -o we-search $(LDFLAGS) searcher.o mdb.o
+we-search: searcher.o mdb.o search.o
+	gcc $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o
+
+wed: daemon.o mdb.o
+	gcc $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o
 
 clean:
 	$(RM) indexer *.o
