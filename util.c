@@ -49,7 +49,7 @@ int is_number(const char *string) {
 
 
 /* Return the size of a file. */
-loff_t file_size (int fd) {
+loff_t file_size(int fd) {
   struct stat64 stat_buf;
   if (fstat64(fd, &stat_buf) == -1) {
     perror("Statting a file to find out the size");
@@ -62,8 +62,10 @@ loff_t file_size (int fd) {
 /* The same as malloc, but returns a char*, and clears the memory. */
 char *cmalloc(int size) {
   char *b = (char*)malloc(size);
+  if (b == NULL)
+    printf("Failed to allocate %d bytes\n", size);
   mem_used += size;
-  /* printf("Allocating %fM\n", (float)size/(1024*1024)); */
+  printf("Allocating %fM\n", (float)size/(1024*1024)); 
   bzero(b, size);
   return b;
 }
