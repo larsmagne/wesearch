@@ -11,7 +11,7 @@
 typedef struct {
   const char *word;
   int word_id;
-  int head;
+  int *head;
   int *tail;
 } word_descriptor;
 
@@ -57,7 +57,9 @@ void read_word_extension_table(void);
 search_result *mdb_search(char **expressions, FILE *fd, int *nres);
 void flush_instance_block(instance_block *ib);
 void print_search_results(search_result *sr, int nresults, FILE *fdp);
+void dump_statistics(void);
 
 extern char *index_dir;
+extern int total_single_word_instances;
 
 #endif
