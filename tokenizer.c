@@ -213,6 +213,10 @@ int tally(const gchar* itext, int start, int end, int tallied_length) {
   return end - start;
 }
 
+int tally_string(const char *string, int tallied_length) {
+  return tally(string, 0, strlen(string), tallied_length);
+}
+
 void partFound(GMimePart* part, gpointer tallied_length) {
   const GMimeContentType* ct = 0;
   const gchar* content = 0;
@@ -300,14 +304,16 @@ document* parse_file(const char *file_name) {
     subject = g_mime_message_get_subject(msg);
     g_mime_message_get_date(msg, &date, &offset);
     if (author != NULL && subject != NULL) {
-      if (author)
+      if (author) {
+	tallied_length = tally_string(author, tallied_length);
 	strncpy(doc.author, author, MAX_HEADER_LENGTH-1);
-      else
+      } else
 	*doc.author = 0;
 
-      if (subject)
+      if (subject) {
+	tallied_length = tally_string(subject, tallied_length);
 	strncpy(doc.subject, subject, MAX_HEADER_LENGTH-1);
-      else
+      } else
 	*doc.subject = 0;
 
       doc.time = date;
