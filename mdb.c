@@ -16,6 +16,8 @@
 #include <ctype.h>
 
 #define DEBUG 0
+#define INSTANCE_BLOCK_LENGTH 255
+#define MAX_GROUPS 16000
 
 static void *word_table[WORD_SLOTS];
 static void *word_extension_table[WORD_EXTENSION_SLOTS];
@@ -34,6 +36,7 @@ static int word_file = 0;
 static int current_article_id = 1;
 static int current_group_id = 1;
 static GHashTable *group_table = NULL;
+static char *reverse_group_table[MAX_GROUPS];
 
 void merror(char *error) {
   perror(error);
@@ -472,9 +475,13 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
 #endif
 
   /* Enter the data. */
-  tmp &= (count << 28);
+  tmp |= (count << 28);
   *((int*) block) = tmp;
   block += 4;
+
+#if DEBUG
+  printf("Instanced %d:%d into %d\n", article_id, count, ib->block_id);
+#endif
 
   /* Do accounting. */
   num_used++;
@@ -483,7 +490,7 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
 
   /* If we've now filled this block, we allocate a new one, and hook
      it onto the end of this chain. */
-  if (num_used++ == 255) {
+  if (num_used++ == INSTANCE_BLOCK_LENGTH) {
     new_instance_block = allocate_instance_block();
     block = ib->block;
     *((int*) block) = new_instance_block;
@@ -515,6 +522,7 @@ void mdb_init(void) {
   read_next_article_id();
   read_group_table();
   read_word_table();
+  read_word_extension_table();
   read_next_instance_block_number();
 }
 
@@ -529,6 +537,12 @@ char *mstrcpy(char *dest, char *src) {
   return dest;
 }
 
+char *sstrcpy(char *dest, char *src) {
+  while ((*dest++ = *src++) != 0)
+    ;
+  return src;
+}
+
 int group_id(char *group) {
   int gid;
   char *g;
@@ -539,6 +553,7 @@ int group_id(char *group) {
     g = (char*)malloc(strlen(group)+1);
     strcpy(g, group);
     g_hash_table_insert(group_table, (gpointer)g, (gpointer)gid);
+    reverse_group_table[gid] = g;
   }
   
   return gid;
@@ -563,9 +578,12 @@ int enter_article(document *doc, char *group, int article) {
 
   bzero(abuf, ARTICLE_SIZE);
   
-  *((int*)b++) = gid;
-  *((int*)b++) = article;
-  *((int*)b++) = doc->time;
+  *((int*)b) = gid;
+  b += 4;
+  *((int*)b) = article;
+  b += 4;
+  *((int*)b) = doc->time;
+  b += 4;
 
   b = mstrcpy(b, doc->author);
   b = mstrcpy(b, doc->subject);
@@ -575,6 +593,13 @@ int enter_article(document *doc, char *group, int article) {
   lseek(article_file, current_article_id * ARTICLE_SIZE, SEEK_SET);
   write_from(article_file, abuf, ARTICLE_SIZE);
   return current_article_id;
+}
+
+void read_article(char *block, int article_id) {
+  if (lseek(article_file, article_id * ARTICLE_SIZE, SEEK_SET) == -1)
+    merror("Reading an article from the article file");
+  
+  read_block(article_file, block, ARTICLE_SIZE);
 }
 
 void flush_group_entry(gpointer key, gpointer value, gpointer user_data) {
@@ -599,6 +624,10 @@ void flush_instance_block(instance_block *ib) {
   if (lseek(instance_file, ib->block_id * BLOCK_SIZE, SEEK_SET) == -1) 
     merror("Flushing an instance block");
 
+#if DEBUG
+  printf("Flushing instance block %d\n", ib->block_id);
+#endif
+  
   write_from(instance_file, ib->block, BLOCK_SIZE);
   ib->dirty = 0;
 }
@@ -620,8 +649,8 @@ void flush_word_block(char *block, int block_number) {
   if (lseek(word_file, block_number * BLOCK_SIZE, SEEK_SET) == -1) 
     merror("Flushing a word block");
 
-  write_from(word_file, block, BLOCK_SIZE);
   clean_block(block);
+  write_from(word_file, block, BLOCK_SIZE);
 }
 
 void flush_word_table(void) {
@@ -674,6 +703,7 @@ void read_group_table(void) {
     strcpy(g, group);
     printf("Got %s (%d)\n", g, group_id);
     g_hash_table_insert(group_table, (gpointer)g, (gpointer)group_id);
+    reverse_group_table[group_id] = g;
   }
   fclose(fp);
 }
@@ -696,15 +726,16 @@ void read_next_article_id(void) {
   current_article_id = size / ARTICLE_SIZE;
 }
 
-void read_next_instance_block_number(void) {
+int file_size (int fd) {
   struct stat stat_buf;
-  int size;
+  if (fstat(fd, &stat_buf) == -1)
+    merror("Statting a file to find out the size");
+  return stat_buf.st_size;
+}
+
+void read_next_instance_block_number(void) {
+  int size = file_size(instance_file);
   
-  if (fstat(instance_file, &stat_buf) == -1)
-    merror("Statting the article file");
-
-  size = stat_buf.st_size;
-
   if ((size % BLOCK_SIZE) != 0) {
     printf("Invalid size for the instance file (%d) for this block size (%d).\n",
 	   size, BLOCK_SIZE);
@@ -735,4 +766,220 @@ void read_word_table(void) {
 
   if (block)
     free(block);
+}
+
+void read_word_extension_table(void) {
+  char *block = NULL;
+  int i;
+  int size = file_size(word_extension_file);
+  
+  if ((size % BLOCK_SIZE) != 0) {
+    printf("Invalid size for the word extension file (%d) for this block size (%d).\n",
+	   size, BLOCK_SIZE);
+    exit(1);
+  }
+  num_word_extension_blocks = size / BLOCK_SIZE;
+
+#if DEBUG
+  printf("Number of word extension blocks: %d\n", num_word_extension_blocks);
+#endif
+  
+  lseek(word_extension_file, 0, SEEK_SET);
+  for (i = 0; i<num_word_extension_blocks; i++) {
+    block = (char*)malloc(BLOCK_SIZE);
+    read_block(word_extension_file, block, BLOCK_SIZE);
+    word_extension_table[i] = block;
+  }
+
+  num_word_extension_blocks++;
+}
+
+typedef struct {
+  char *word;
+  int negate_p;
+  int word_id;
+  instance_block *instance;
+  int next;
+} search_item;
+
+typedef struct {
+  char *group;
+  int article;
+  char author[MAX_HEADER_LENGTH];
+  char subject[MAX_HEADER_LENGTH];
+  char body[MAX_SAVED_BODY_LENGTH];
+  time_t time;
+  int goodness;
+} search_result;
+
+#define MAX_SEARCH_ITEMS 1024
+#define MAX_SEARCH_RESULTS 1024
+
+static search_item search_items[MAX_SEARCH_ITEMS];
+static search_result search_results[MAX_SEARCH_RESULTS];
+
+unsigned int next_instance(search_item *si) {
+  unsigned int result;
+  
+  if (!si->instance)
+    return 0;
+
+  if (si->next == INSTANCE_BLOCK_LENGTH) {
+    si->instance = get_instance_block(*((int*)(si->instance->block)));
+    si->next = 0;
+  }
+
+  if (si->next > si->instance->num_used)
+    return 0;
+
+  result = *((int*)(si->instance->block + INSTANCE_BLOCK_HEADER_SIZE +
+		    (si->next * 4)));
+
+  return result;
+}
+
+unsigned int article_id(unsigned int spec) {
+  return spec & 0xfff;
+}
+
+unsigned int count_id(unsigned int spec) {
+  return spec >> 28;
+}
+
+void wind_to_article_id(search_item *si, int aid) {
+  int next = 0;
+
+  while (TRUE) {
+    next = article_id(next_instance(si));
+    if (next == 0 || next >= aid)
+      return;
+    si->next++;
+  }
+  
+}
+
+void search_details(int article_id, int goodness, int index) {
+  char block[ARTICLE_SIZE];
+  char *b = block;
+  search_result *sr = &search_results[index];
+  int group_id;
+
+  read_article(block, article_id);
+
+  group_id = *((int*)b);
+  b += 4;
+  sr->article = *((int*)b);
+  b += 4;
+  sr->time = *((int*)b);
+  b += 4;
+
+  b = sstrcpy(sr->author, b);
+  b = sstrcpy(sr->subject, b);
+  b = sstrcpy(sr->body, b);
+
+#if DEBUG
+  printf("group_id: %x, article: %x\n", group_id, sr->article);
+#endif
+
+  sr->group = reverse_group_table[group_id];
+  sr->goodness = goodness;
+}
+
+void print_search_results(search_result *sr, int nresults) {
+  int i;
+
+  for (i = 0; i<nresults; i++) {
+    printf("%d\t%s\t%d\t%d\t%s\t%s\t%s\n",
+	   sr->goodness,
+	   sr->group,
+	   sr->article,
+	   (unsigned int)sr->time,
+	   sr->author,
+	   sr->subject,
+	   sr->body);
+    sr++;
+  }
+  
+}
+
+search_result *mdb_search(char **expressions) {
+  int ne = 0, i;
+  char *exp;
+  word_descriptor *wd;
+  search_item *si;
+  int max_article_id, aid, sid;
+  int matches, goodness;
+  int ends = 0, nresults = 0;
+
+  bzero(search_results, MAX_SEARCH_RESULTS * sizeof(search_result));
+  for (i = 0; expressions[i]; i++) {
+    exp = expressions[i];
+    printf("Searching for %s\n", exp);
+    si = &search_items[ne];
+    if (*exp == '-') {
+      si->negate_p = 1;
+      si->word = exp + 1;
+    } else {
+      si->negate_p = 0;
+      si->word = exp;
+    }
+
+    if ((wd = lookup_word(si->word)) != NULL) {
+      si->word_id = wd->word_id;
+      si->instance = get_instance_block(wd->head);
+      printf("Found %s: %d\n", si->word, si->word_id);
+    } else {
+      si->instance = NULL;
+    }
+    si->next = 0;
+
+    ne++;
+  }
+
+  if (ne == 0)
+    return NULL;
+
+  while (ends < ne) {
+    max_article_id = 0;
+    for (i = 0; i<ne; i++) {
+      aid = article_id(next_instance(&search_items[i]));
+      if (aid > max_article_id)
+	max_article_id = aid;
+    }
+
+#if DEBUG
+    printf("max_article_id: %d\n", max_article_id);
+#endif
+
+    for (i = 0; i<ne; i++) 
+      wind_to_article_id(&search_items[i], max_article_id);
+
+    matches = 0;
+    goodness = 1;
+    ends = 0;
+    for (i = 0; i<ne; i++) {
+      si = &search_items[i];
+      sid = next_instance(si);
+      aid = article_id(sid);
+      if ((si->negate_p == 1 && aid != max_article_id) ||
+	  (si->negate_p == 0 && aid == max_article_id)) {
+	matches++;
+	goodness *= count_id(sid);
+	if (si->negate_p == 0)
+	  si->next++;
+      }
+      if (aid == 0)
+	ends++;
+    }
+    
+    if (matches == ne && ends != ne) {
+#if DEBUG      
+      printf("Found a match: %d, goodness %d\n", max_article_id, goodness);
+#endif
+      search_details(max_article_id, goodness, nresults++);
+    }
+  }
+
+  print_search_results(search_results, nresults);
+  return search_results;
 }
