@@ -58,6 +58,7 @@ search_result *mdb_search(char **expressions, FILE *fd, int *nres);
 void flush_instance_block(instance_block *ib);
 void print_search_results(search_result *sr, int nresults, FILE *fdp);
 void dump_statistics(void);
+void defragment_instance_table(void);
 
 extern char *index_dir;
 extern int total_single_word_instances;
