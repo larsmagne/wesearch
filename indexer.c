@@ -57,10 +57,13 @@ void lock_and_uid(void) {
   setgid(500);
 }
 
+static time_t last_start_time = 0;
+static int last_total_files = 0;
+
 void index_from_file(char *from_file) {
   FILE *fp;
   char file[MAX_FILE_NAME], *f;
-  time_t elapsed;
+  time_t elapsed, last_elapsed, now;
 
   if ((fp = fopen(from_file, "r")) == NULL)
     return;
@@ -71,10 +74,22 @@ void index_from_file(char *from_file) {
   while (fscanf(fp, "%s\n", f) != EOF) {
     index_file(file);
     if (! (total_files++ % 1000)) {
-      elapsed = time(NULL)-start_time;
+      now = time(NULL);
+      elapsed = now-start_time;
+      if (last_start_time == 0) {
+	last_start_time = start_time;
+      }
       if (elapsed != 0) {
-	printf("    %d files (%d per second)\n",
-	       total_files, (int)(total_files/elapsed));
+	last_elapsed = now-last_start_time;
+	printf("    %d files (%d/s; %d/s last %d seconds)\n",
+	       total_files, 
+	       (int)(total_files/elapsed),
+	       (last_elapsed?
+		(int)((total_files-last_total_files) / last_elapsed):
+		0),
+	       (int)last_elapsed);
+	last_start_time = now;
+	last_total_files = total_files;
 	printf("    %d instances (%d per second)\n",
 	       instances, (int)(instances/elapsed));
       }
