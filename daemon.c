@@ -1,14 +1,13 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <netdb.h>
-#include <netinet/in.h>
 #include <sys/types.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <time.h>
 #include <signal.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <getopt.h>
