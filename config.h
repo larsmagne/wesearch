@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 /* Where the index files will be stored. */
-#define INDEX_DIRECTORY "/index/we"
+#define INDEX_DIRECTORY "/index/we-work"
 
 /* The root of the news spool. */
 #define NEWS_SPOOL "/mirror/var/spool/news/articles/"
@@ -29,11 +29,11 @@
 
 /* The number of word slots.  Must be a power of two.  This is the
    main factor in determining the size of the memory usage. */
-#define WORD_SLOTS (524288 * 4)
+#define WORD_SLOTS (524288 * 8)
 
 /* The maximum number of extension slots.  If you need more of them,
    add them. */
-#define WORD_EXTENSION_SLOTS (1024*100)
+#define WORD_EXTENSION_SLOTS (1024*200)
 
 /* The block size used in the tables above. */
 #define BLOCK_SIZE 1024
@@ -41,11 +41,11 @@
 
 /* The maximum number of instance blocks.  This is kept on disk, and
    should be set to something that is big enough for your data set. */
-#define INSTANCE_TABLE_SIZE (1024*1024*20)
+#define INSTANCE_TABLE_SIZE (1024*1024*40)
 
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
-#define INSTANCE_BUFFER_SIZE (1024*1024*2)
+#define INSTANCE_BUFFER_SIZE ((int)(1024*1024*1))
 
 /* This variable says how many distinct words per document we should
    accept.  Articles with a whole lot of distinct words are usually
