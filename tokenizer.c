@@ -118,12 +118,15 @@ int word_ignore(unsigned char *beg, unsigned char *end) {
   if (length < MIN_WORD_LENGTH ||
       length > MAX_WORD_LENGTH)
     return 1;
-  
+
   for (num_check = beg; num_check<end; num_check++) {
+    /*
     if (isdigit(*num_check)) {
       if (num_digits++ > 3)
 	return 1;
-    } else if (*num_check < 128)
+    } else 
+    */ 
+    if (*num_check < 128)
       has_ascii_p = 1;
   }
 
