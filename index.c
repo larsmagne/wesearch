@@ -13,6 +13,7 @@
 #include "mdb.h"
 #include "tokenizer.h"
 #include "index.h"
+#include "util.h"
 
 int instances = 0;
 int total_unique_words = 0;
@@ -20,6 +21,44 @@ int total_files = 0;
 time_t start_time = 0;
 char *news_spool = NEWS_SPOOL;
 char *from_file = NULL;
+static GHashTable *indexed_files = NULL;
+int suppress_duplicate_files = 0;
+static FILE *indexed_files_file = NULL;
+
+
+/* Read the list of parsed articles from disk into the indexed_files table. */
+void read_indexed_files_table(void) {
+  FILE *fp;
+  char file[MAX_FILE_NAME], *f;
+  
+  if ((fp = fopen(index_file_name(INDEXED_FILES_FILE), "r")) == NULL)
+    return;
+
+  while (fscanf(fp, "%s\n", file) != EOF) {
+    f = cmalloc(strlen(file)+1);
+    strcpy(f, file);
+#if DEBUG
+    printf("Got %s\n", f);
+#endif
+    g_hash_table_insert(indexed_files, (gpointer)f, (gpointer)1);
+  }
+  fclose(fp);
+}
+
+void indexer_init(void) {
+  if (suppress_duplicate_files) 
+    read_indexed_files_table();
+  if ((indexed_files_file = fopen(index_file_name(INDEXED_FILES_FILE), "a"))
+      == NULL)
+    merror("Opening the instance file");
+  fseek(indexed_files_file, 0, SEEK_END);
+}
+
+
+void log_indexed_file(char *group, int article) {
+  fprintf(indexed_files_file, "%s/%d\n", group, article);
+}
+
 
 void index_article(const char* group, int article) {
   char file_name[MAX_FILE_NAME];
@@ -117,9 +156,11 @@ int index_file(const char *file_name) {
   char group[MAX_FILE_NAME];
   int article_id = 0;
 
+  printf("%s\n", file_name); 
   if (path_to_article_spec(file_name, group, &article)) {
 
     doc = parse_file(file_name);
+    log_indexed_file(group, article);
 
     /* We ignore documents that have more than MAX_DISTINCT_WORDS.  They
        are probably bogus. */
