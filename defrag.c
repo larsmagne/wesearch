@@ -113,8 +113,8 @@ void defragment_instance_table(void) {
   write_from(new_instance_file, block, BLOCK_SIZE);
   free(block);
 
-  printf("Priming cache...");
-  while (id < current_instance_block_number && i++ < 1024*1024)
+  printf("Priming cache...\n");
+  while (id < current_instance_block_number && i++ < 1024*512)
     get_instance_block(id++);
   printf("done\n");
 
