@@ -69,6 +69,8 @@ int path_to_article_spec(const char *file_name, char *group, int *article) {
     *group++ = c;
   }
 
+  *group++ = 0;
+
   if (! last_slash)
     return 0;
 
@@ -76,7 +78,7 @@ int path_to_article_spec(const char *file_name, char *group, int *article) {
 
   s = last_slash + 1;
   while ((c = *s++) != 0) {
-    if (c < '0' || c > '9')
+    if ((c < '0') || (c > '9'))
       return 0;
     art = art * 10 + c - '0';
   }
@@ -93,14 +95,14 @@ void index_word(char *word, int count, int article_id) {
 
   /* See if the word is in the word table.  If not, enter it. */
   if ((wd = lookup_word(word)) == NULL) {
-    if ((total_unique_words++ % 1000) == 0) 
+    if ((total_unique_words++ % 1) == 0) 
       printf("Got %d words (%s)\n", total_unique_words-1, word);
     wd = enter_word(word);
     if (wd == NULL) {
       printf("Can't find '%s' after entering it.\n", word);
       exit(1);
     }
-  }
+  } 
 
   instances++;
   enter_instance(article_id, wd, count);
@@ -133,6 +135,8 @@ int index_file(const char *file_name) {
       index_word(group, 1, article_id);
       return doc->num_words;
     }
+  } else {
+    printf("Can't find an article spec for %s\n", file_name);
   }
   return 0;
 }
@@ -232,7 +236,7 @@ main(int argc, char **argv)
   }
 
   mdb_report();
-  write_group_table();
+  flush();
 
   exit(0);
 }
