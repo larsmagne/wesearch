@@ -5,12 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Ignore words longer than this */
-#define MAX_WORD_LENGTH 24
-
-/* Ignore words shorter than this */
-#define MIN_WORD_LENGTH 3
-
 /* This determines which characters are seen as text characters.  It
    basically includes all letters in Latin-1, as well as the
    digits. */
