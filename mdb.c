@@ -27,6 +27,7 @@ void *word_table[WORD_SLOTS];
 void *word_extension_table[WORD_EXTENSION_SLOTS];
 
 static int instance_table[INSTANCE_TABLE_SIZE];
+static int next_instance_blocks[INSTANCE_TABLE_SIZE];
 static instance_block instance_buffer[INSTANCE_BUFFER_SIZE];
 static int shutting_down_p = 0;
 int instance_buffer_size = INSTANCE_BUFFER_SIZE;
@@ -51,6 +52,8 @@ static int total_word_instances = 0;
 int ninstance_blocks_read = 0;
 int is_indexing_p = 0;
 
+time_t now_time;
+
 #define article_id(id) ((id) & 0xfffffff)
 
 #define count_id(id) (((unsigned int)id) >> 28)
@@ -72,6 +75,14 @@ char *index_file_name(char *name) {
   strcat(file_name, "/");
   strcat(file_name, name);
   return file_name;
+}
+
+void error_out(void) {
+  int i = 1;
+  
+  i--;
+  i = 1/i;
+  printf("%d", i);
 }
 
 /* A function used when debugging.  It dumps the contents of the
@@ -123,9 +134,11 @@ int allocate_chunking_instance_block(int ibn, int blocks) {
 
   while (blocks-- > 0) {
     current_instance_block_number++;
-    if (blocks > 0)
+    if (blocks > 0) {
       *block = current_instance_block_number + 1;
-    else
+      next_instance_blocks[current_instance_block_number] = 
+	current_instance_block_number + 1;
+    } else
       *block = 0;
     write_from(instance_file, (char *)block, BLOCK_SIZE);
   }
@@ -143,14 +156,25 @@ int allocate_extension_block(void) {
   return num_word_extension_blocks;
 }
 
+int sort_instance_buffer_less(const void *ib1, const void *ib2) {
+  return ((instance_block*)ib1)->block_id - 
+    ((instance_block*)ib2)->block_id;
+}
+
+
 /* This function goes through the instance buffers and tries to free
    10% of them.  It looks for buffers that haven't been used in 5
    seconds. */
-void free_some_instance_buffers_1(void) {
+void free_some_instance_buffers_1(int seconds) {
   int buffers_to_free = instance_buffer_size / 10;
   time_t now = time(NULL);
   instance_block *ib;
   int buffers_freed = 0;
+  instance_block **ibs;
+  int nibs = 0, i;
+
+  ibs = malloc(buffers_to_free * sizeof(instance_block*));
+  bzero(ibs, buffers_to_free * sizeof(instance_block*));
 
   printf("Freeing %d buffers\n", buffers_to_free);
 
@@ -167,20 +191,23 @@ void free_some_instance_buffers_1(void) {
 	   we don't need it any more... */
 	((is_indexing_p && ib->num_used == INSTANCE_BLOCK_LENGTH) || 
 	 /* Or it hasn't been used in a long time. */
-	 ((now - ib->access_time) > 60 * 5))) {
+	 ((now - ib->access_time) > seconds))) {
 #if DEBUG
-      printf("%d is %d old\n", gc_next, (int)(now - ib->access_time));
+      printf("%d; %d is %d old\n", seconds, 
+	     gc_next, (int)(now - ib->access_time));
 #endif
-      if (ib->dirty)
-	flush_instance_block(ib);
-      instance_table[ib->block_id] = 0;
-      ib->block_id = 0;
-      bzero(ib->block, BLOCK_SIZE);
+      ibs[nibs++] = ib;
       buffers_to_free--;
-      allocated_instance_buffers--;
       buffers_freed++;
     }
   }
+
+  qsort(ibs, nibs, sizeof(instance_block*), sort_instance_buffer_less);
+
+  for(i = 0; i < nibs; i++) 
+    flush_instance_block(ibs[i]);
+
+  free(ibs);
 
   printf("Freed %d buffers.\n", buffers_freed);
 
@@ -192,12 +219,14 @@ void free_some_instance_buffers_1(void) {
 /* Calls the freeing function until it finally frees something. */
 void free_some_instance_buffers(void) {
   int aib = allocated_instance_buffers;
-  
-  free_some_instance_buffers_1();
+  int seconds = 60 * 60;
+
+  free_some_instance_buffers_1(seconds);
   while (aib == allocated_instance_buffers) {
     printf("No buffers freed; sleeping...\n");
     sleep(1);
-    free_some_instance_buffers_1();
+    seconds = seconds / 2;
+    free_some_instance_buffers_1(seconds);
   }
 }
 
@@ -256,7 +285,7 @@ void swap_instance_block_in(int bn, int block_id) {
 
     if (ib->block == NULL) {
       perror("chow-indexer");
-      exit(1);
+      error_out();
     }
   }
 
@@ -275,7 +304,21 @@ instance_block *get_instance_block(int block_id) {
   if (! (bn = instance_table[block_id])) {
     /* The block is not in the buffer, so we need to swap it in. */
     bn = get_free_instance_buffer();
-    swap_instance_block_in(bn, block_id);
+    if (next_instance_blocks[block_id]) {
+      instance_block *ib = &instance_buffer[bn];
+      if (ib->block == NULL) 
+	ib->block = cmalloc(BLOCK_SIZE);
+      /* We don't really need to switch anything in, because it's
+	 an empty, chunked block. */
+      bzero(ib->block, BLOCK_SIZE);
+      *(int*)(ib->block) = next_instance_blocks[block_id];
+      next_instance_blocks[block_id] = 0;
+      ib->block_id = block_id;
+      ib->dirty = 0;
+      ib->num_used = 0;
+    } else {
+      swap_instance_block_in(bn, block_id);
+    }
     instance_table[block_id] = bn;
   }
 
@@ -285,7 +328,7 @@ instance_block *get_instance_block(int block_id) {
   
   if (instance_buffer[bn].block == NULL) {
     printf("Got a zero block (bn: %d, block_id: %d).\n", bn, block_id);
-    exit(1);
+    error_out();
   }
   
   return &(instance_buffer[bn]);
@@ -358,7 +401,7 @@ char *allocate_word_block(const char *word) {
 
   if (block == NULL) {
     perror("chow-indexer");
-    exit(1);
+    error_out();
   }
 
   word_table[slot_number] = block;
@@ -386,7 +429,7 @@ word_descriptor *block_search_word(const char *word, char *word_block) {
 	word_block = word_extension_table[*((int*)word_block)];
 	if (word_block == NULL) {
 	  printf("Went to a non-existing block.\n");
-	  exit(1);
+	  error_out();
 	}
 	b = word_block + BLOCK_HEADER_SIZE;
       } else 
@@ -395,7 +438,7 @@ word_descriptor *block_search_word(const char *word, char *word_block) {
 
     if (word_block == NULL) {
       printf("Went to a non-existing block here.\n");
-      exit(1);
+      error_out();
     } 
 
     while ((*b != 0) && (*b++ == *w++))
@@ -518,7 +561,7 @@ word_descriptor *enter_word(char *word) {
     
     if (new_block == NULL) {
       perror("chow-indexer");
-      exit(1);
+      error_out();
     }
 
     allocate_extension_block();
@@ -620,7 +663,7 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
   /* Do accounting. */
   ib->num_used++;
   ib->dirty = 1;
-  ib->access_time = time(NULL);
+  ib->access_time = now_time;
 
   /* printf("ib->num_used: %d\n", ib->num_used); */
 
@@ -651,6 +694,7 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
       }
     }
     dirty_block(wd->w_block);
+    flush_instance_block(ib);
   }
 }
 
@@ -684,6 +728,8 @@ void mdb_init(void) {
 
   group_table = g_hash_table_new(g_str_hash, g_str_equal);
   bzero(word_table, WORD_SLOTS * 4);
+
+  bzero(next_instance_blocks, INSTANCE_TABLE_SIZE * sizeof(int));
   
   read_next_article_id();
   read_group_table();
@@ -788,9 +834,17 @@ void flush_instance_block(instance_block *ib) {
 #if DEBUG
   printf("Flushing instance block %d\n", ib->block_id);
 #endif
-  
-  write_from(instance_file, ib->block, BLOCK_SIZE);
+
+  if (ib->dirty)
+    write_from(instance_file, ib->block, BLOCK_SIZE);
+
   ib->dirty = 0;
+  instance_table[ib->block_id] = 0;
+  ib->block_id = 0;
+  ib->num_used = 0;
+  ib->access_time = 0;
+  bzero(ib->block, BLOCK_SIZE);
+  allocated_instance_buffers--;
   if (shutting_down_p) 
     free(ib->block);
 }
@@ -905,7 +959,7 @@ void read_next_article_id(void) {
   if ((size % ARTICLE_SIZE) != 0) {
     printf("Invalid size for the article file (%Ld) for this article size (%d).\n",
 	   size, ARTICLE_SIZE);
-    exit(1);
+    error_out();
   }
 
   current_article_id = (unsigned int)(size / ARTICLE_SIZE);
@@ -920,7 +974,7 @@ void read_next_instance_block_number(void) {
   if ((size % BLOCK_SIZE) != 0) {
     printf("Invalid size for the instance file (%Ld) for this block size (%d).\n",
 	   size, BLOCK_SIZE);
-    exit(1);
+    error_out();
   }
 
   current_instance_block_number = (int)(size / BLOCK_SIZE);
@@ -963,7 +1017,7 @@ void read_word_extension_table(void) {
   if ((size % WORD_BLOCK_SIZE) != 0) {
     printf("Invalid size for the word extension file (%Ld) for this block size (%d).\n",
 	   size, WORD_BLOCK_SIZE);
-    exit(1);
+    error_out();
   }
   num_word_extension_blocks = (int)(size / WORD_BLOCK_SIZE);
 
@@ -1208,9 +1262,11 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int positives = 0;
   int wrapped = 0;
   int total_nresults = 0;
+  char *stop;
 
   fprintf(fdp, "# Articles: %d\n", current_article_id);
 
+  print_stop();
   bzero(search_results, MAX_SEARCH_RESULTS * sizeof(search_result));
   for (i = 0; expressions[i]; i++) {
     exp = expressions[i];
@@ -1226,6 +1282,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
       si->word = exp;
     }
 
+  print_stop();
     if (stop_word_p(si->word)) {
       fprintf(fdp, "# Ignoring: %s\n", si->word);
     } else if (strlen(si->word) < MIN_WORD_LENGTH) {
@@ -1258,8 +1315,13 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   if (positives == 0)
     return NULL;
 
+  stop = print_stop();
   while (! ended) {
     max_article_id = 0;
+    if (stop != print_stop()) {
+      printf("Error now: %x\n", print_stop());
+      error_out();
+    }
     for (i = 0; i<ne; i++) {
       aid = article_id(next_instance(&search_items[i]));
       if (aid > max_article_id)
@@ -1276,10 +1338,12 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     matches = 0;
     goodness = 1;
     ends = 0;
+
     for (i = 0; i<ne; i++) {
       si = &search_items[i];
       sid = next_instance(si);
       aid = article_id(sid);
+      //printf("Article id %d\n", aid);
       if ((si->negate_p == 1 && aid != max_article_id) ||
 	  (si->negate_p == 0 && aid == max_article_id)) {
 	matches++;
@@ -1303,7 +1367,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
 
       total_nresults++;
 
-      if (nresults++ >= MAX_INTERNAL_SEARCH_RESULTS) {
+      if (++nresults >= MAX_INTERNAL_SEARCH_RESULTS) {
 	wrapped++;
 	nresults = 0;
 	/*
@@ -1314,6 +1378,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     }
   }
 
+  print_stop();
   fprintf(fdp, "# Internal: %d\n", total_nresults);
 
   if (total_nresults >= MAX_SEARCH_RESULTS) {
@@ -1327,6 +1392,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
 		   isearch_results[i].goodness, i);
   }
 
+  print_stop();
 #if DEBUG
   printf("Total results: %d\n", total_nresults);
 #endif
@@ -1350,7 +1416,7 @@ void block_dump_word(const char *word_block) {
 	word_block = word_extension_table[*((int*)word_block)];
 	if (word_block == NULL) {
 	  printf("Went to a non-existing block.\n");
-	  exit(1);
+	  error_out();
 	}
 	b = word_block + BLOCK_HEADER_SIZE;
       } else 
@@ -1359,7 +1425,7 @@ void block_dump_word(const char *word_block) {
 
     if (word_block == NULL) {
       printf("Went to a non-existing block here.\n");
-      exit(1);
+      error_out();
     } 
 
     while (*b++)
