@@ -32,7 +32,7 @@ static int shutting_down_p = 0;
 int instance_buffer_size = INSTANCE_BUFFER_SIZE;
 
 static int num_word_extension_blocks = 1;
-static int current_instance_block_number = 1;
+int current_instance_block_number = 1;
 static int num_word_id = 1;
 static int next_free_buffer = 1;
 static int instance_file = 0;
@@ -195,34 +195,6 @@ int get_free_instance_buffer(void) {
 }
 
 
-/* Read a block from a file into memory. */
-void read_block(int fd, char *block, int block_size) {
-  int rn = 0, ret;
-  
-  while (rn < block_size) {
-    ret = read(fd, block + rn, block_size - rn);
-    if (ret == 0) {
-      fprintf(stderr, "Reached end of file (block_size: %d).\n", block_size);
-      exit(1);
-    } else if (ret == -1) {
-      printf("Reading into %x\n", (int)block);
-      merror("Reading a block");
-    }
-      
-    rn += ret;
-  }
-}
-
-/* Read a block from a file at a specified offset into a in-memory
-   block. */
-void read_into(int fd, int block_id, char *block, int block_size) {
-  if (lseek64(fd, (loff_t)block_id * block_size, SEEK_SET) == -1) {
-    merror("Seeking before reading a block");
-  }
-
-  read_block(fd, block, block_size);
-}
-
 /* Determine how many entries in an instance block are used. */
 int instance_block_used_entries(char *b) {
   int n = 0;
@@ -270,6 +242,18 @@ void swap_instance_block_in(int bn, int block_id) {
 }
 
 
+int speculative_readahead = 0;
+
+void get_more_instance_blocks(int id) {
+  int i = 0;
+
+  speculative_readahead = 0;
+  while (id < current_instance_block_number && i++ < 1024)
+    get_instance_block(id++);
+  speculative_readahead = 1;
+}
+
+
 /* Get an instance block. */
 instance_block *get_instance_block(int block_id) {
   int bn;
@@ -279,6 +263,8 @@ instance_block *get_instance_block(int block_id) {
     bn = get_free_instance_buffer();
     swap_instance_block_in(bn, block_id);
     instance_table[block_id] = bn;
+    if (speculative_readahead != 0)
+      get_more_instance_blocks(block_id);
   }
 
 #if DEBUG
@@ -834,10 +820,12 @@ void flush_word_extension_table(void) {
 
 /* Flush everything to disk. */
 void soft_flush(void) {
+  printf("Flushing tables...");
   flush_word_table();
   flush_word_extension_table();
   flush_instance_table();
   flush_group_table();
+  printf("done.\n");
 }
 
 void flush(void) {
@@ -1093,8 +1081,6 @@ void search_details(int article_id, int goodness, int index) {
 void print_search_results(search_result *sr, int nresults, FILE *fdp) {
   int i;
 
-  fprintf(fdp, "# Results: %d\n", nresults);
-
   for (i = 0; i<nresults; i++) {
     fprintf(fdp, "%d\t%s\t%d\t%d\t%s\t%s\t%s\n",
 	    sr->goodness,
@@ -1273,7 +1259,8 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     
     if (matches == ne && ends != ne) {
 #if DEBUG
-      printf("Found a match: %d, goodness %d\n", max_article_id, goodness);
+      printf("Found a match: %d, %d, goodness %d\n", 
+	     nresults, max_article_id, goodness);
 #endif
       isearch_results[nresults].article_id = max_article_id;
       isearch_results[nresults].goodness = goodness;
@@ -1284,19 +1271,18 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
 	wrapped++;
 	nresults = 0;
 	/*
-	fprintf(fdp, "# Internal-max: %d\n", MAX_INTERNAL_SEARCH_RESULTS);
-	break;
+	  fprintf(fdp, "# Internal-max: %d\n", MAX_INTERNAL_SEARCH_RESULTS);
+	  break;
 	*/
       }
     }
   }
 
+  fprintf(fdp, "# Internal: %d\n", total_nresults);
+
   if (total_nresults >= MAX_SEARCH_RESULTS) {
-    fprintf(fdp, "# Internal: %d\n", nresults);
-    fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
-    /*
-    nresults = sort_isearch_results(isearch_results, nresults);
-    */
+    //fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
+    //nresults = sort_isearch_results(isearch_results, nresults);
     nresults = rearrange_isearch_results(isearch_results, nresults, wrapped);
   }
 
@@ -1306,8 +1292,9 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   }
 
 #if DEBUG
-  printf("Total results: %d\n", nresults);
+  printf("Total results: %d\n", total_nresults);
 #endif
+  fprintf(fdp, "# Results: %d\n", nresults);
   sort_search_results(search_results, nresults);
   *nres = nresults;
   return search_results;
