@@ -22,7 +22,7 @@ while (<TAIL>) {
 	    $found = 1;
 	}
     } else {
-	if (! $found && $lasts{$file}) {
+	if (! $found && ! $lasts{$file}) {
 	    $found = 1;
 	}
     }
