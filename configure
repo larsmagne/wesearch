@@ -1504,7 +1504,7 @@ glib_libs="$GLIB_LIBS"
 
 
 
-CFLAGS="$CFLAGS -L/usr/lib/news -I/usr/local/include -L/usr/local/lib $GLIB_CFLAGS $GLIB_LIBS"
+CFLAGS="$CFLAGS -L$X11BASE/lib -I$LOCALBASE/include -I$X11BASE/include $GLIB_CFLAGS $GLIB_LIBS"
 			
 
 	
