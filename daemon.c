@@ -27,6 +27,7 @@ struct option long_options[] = {
   {"index", 1, 0, 'i'},
   {"help", 1, 0, 'h'},
   {"port", 1, 0, 'p'},
+  {"buffer", 1, 0, 'b'},
   {0, 0, 0, 0}
 };
 
@@ -40,7 +41,7 @@ static int port = 8010;
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hs:i:p:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hs:i:p:b:", long_options, &option_index);
     if (c == -1)
       break;
 
@@ -55,6 +56,10 @@ int parse_args(int argc, char **argv) {
       
     case 'p':
       port = atoi(optarg);
+      break;
+      
+    case 'b':
+      instance_buffer_size = atoi(optarg);
       break;
       
     case 'h':
@@ -79,16 +84,14 @@ int main(int argc, char **argv) {
   char *expression[MAX_SEARCH_ITEMS];
   struct sockaddr_in sin, caddr;
   int nitems = 0;
-  int i;
   static int so_reuseaddr = TRUE;
   int dirn;
-  int nfiles_indexed = 0;
 
   dirn = parse_args(argc, argv);
 
-  mdb_init();
   tokenizer_init();
   indexer_init();
+  mdb_init();
 
   if (signal(SIGHUP, closedown) == SIG_ERR) {
     perror("Signal");
@@ -122,9 +125,10 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  printf("Accepting...\n");
+
   while (TRUE) {
     nitems = 0;
-    printf("Accepting...\n");
     wsd = accept(server_socket, (struct sockaddr*)&caddr, &addlen);
     peerlen = sizeof(struct sockaddr);
 
@@ -133,7 +137,7 @@ int main(int argc, char **argv) {
 
     fgets(buffer, BUFFER_SIZE, client);
 
-    printf("Got '%s'\n", buffer);
+    printf("Got %s", buffer);
 
     s = strtok(buffer, " \n");
 
@@ -144,25 +148,18 @@ int main(int argc, char **argv) {
     
     expression[nitems] = NULL;
 
-    for (i = 0; i<nitems; i++) {
-      printf("%d '%s'\n", i, expression[i]);
-    }
-
     if (nitems >= 1) {
       if (!strcmp(expression[0], "search")) {
 	printf("Searching...\n");
 	search(expression + 1, wsd);
       } else if (!strcmp(expression[0], "index")) {
-	printf("Indexing...\n");
 	index_file(expression[1]);
-	/*
-	if (! (nfiles_indexed++ % 100)) {
-	  soft_flush();
-	}
-	*/
+      } else if (!strcmp(expression[0], "word")) {
+	index_word(expression[1], 1, 2);
       } else if (!strcmp(expression[0], "flush")) {
 	printf("Flushing...\n");
 	soft_flush();
+	flush_indexed_file();
       }
     }
 
