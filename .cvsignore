@@ -6,3 +6,4 @@ Makefile
 *.db
 we-search
 wed
+confdefs.h
