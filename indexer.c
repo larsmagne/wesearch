@@ -61,6 +61,8 @@ int parse_args(int argc, char **argv) {
   return optind;
 }
 
+#define _POSIX_MEMLOCK 1
+
 void lock_and_uid(void) {
 #if _POSIX_MEMLOCK == 1
 /* Unfortunately, FreeBSD does not implement mlockall - see PR kern/43426 */
@@ -171,7 +173,8 @@ int main(int argc, char **argv)
   int dirn;
   struct stat stat_buf;
 
-  lock_and_uid();
+  if (geteuid() == 0)
+    lock_and_uid();
   dirn = parse_args(argc, argv);
   
   start_time = time(NULL);
