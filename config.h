@@ -29,7 +29,7 @@
 
 /* The number of word slots.  Must be a power of two.  This is the
    main factor in determining the size of the memory usage. */
-#define WORD_SLOTS 524288
+#define WORD_SLOTS (524288 * 4)
 
 /* The maximum number of extension slots.  If you need more of them,
    add them. */
@@ -37,6 +37,7 @@
 
 /* The block size used in the tables above. */
 #define BLOCK_SIZE 1024
+#define WORD_BLOCK_SIZE 256
 
 /* The maximum number of instance blocks.  This is kept on disk, and
    should be set to something that is big enough for your data set. */
@@ -51,7 +52,7 @@
    not very interesting, and may well be bogus. */
 #define MAX_DISTINCT_WORDS 1000
 
-/* If you have a Linux with O_STREAMING, use the followin define. */
+/* If you have a Linux with O_STREAMING, use the following define. */
 #define O_STREAMING    04000000
 /* If not, uncomment the following. */
 /* #define O_STREAMING    0 */
