@@ -199,6 +199,7 @@ char *stop_words_en[] =
    "yours",
    "yourself",
    "yourselves",
+   "com",
    NULL};
 
 #endif
