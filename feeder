@@ -1,0 +1,11 @@
+#!/usr/bin/perl
+
+open (TAIL, "tail -q -f /tmp/copied /tmp/m2n.error.log|") || die;
+
+while (<TAIL>) {
+    chop;
+    next unless /.*\/var\/spool\/news\/articles\/(.*)$/;
+    $file = $1;
+    print $1, "\n";
+    system("echo 'index $file' | nc localhost 8010 2>&1 >>/tmp/index.log");
+}
