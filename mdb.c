@@ -1146,6 +1146,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int matches, goodness;
   int ends = 0, nresults = 0;
   int ended = 0;
+  int positives = 0;
 
   fprintf(fdp, "# Articles: %d\n", current_article_id);
 
@@ -1188,10 +1189,12 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
       si->next = 0;
       
       ne++;
+      if (si->negate_p == 0)
+	positives++;
     }
   }
 
-  if (ne == 0)
+  if (positives == 0)
     return NULL;
 
   while (! ended) {
