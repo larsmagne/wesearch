@@ -1,11 +1,34 @@
 #!/usr/bin/perl
 
-open (TAIL, "tail -q -f /tmp/copied /tmp/m2n.error.log|") || die;
+#open (TAIL, "tail -q -f /tmp/copied /tmp/m2n.error.log|") || die;
+open (TAIL, "/tmp/newcopied") || die;
 
 while (<TAIL>) {
     chop;
-    next unless /.*\(/var\/spool\/news\/articles\/.*)$/;
-    $file = "/mirror/$1";
-    print $1, "\n";
-    system("echo 'index $file' | nc localhost 8010 2>&1 >>/tmp/index.log");
+    print $file, "\n";
+    next if /spam/;
+    next if /gmane.config/;
+    next unless /.*(\/var\/spool\/news\/articles\/.*)$/;
+    $ofile = $1;
+    $file = "/mirror$ofile";
+    $odir = $ofile;
+    $odir =~ s/[0-9]+$//;
+    next if -e "${odir}.noindex";
+    if (-e $file) {
+	if (open (FILE, $file)) {
+	    $spam = 0;
+	    while (<FILE>) {
+		chop;
+		$spam = 1 if /^Xref.*gmane.spam.detected/i;
+		$spam = 1 if /^x-no-archive:/i;
+		$spam = 1 if /^x-archive:/i;
+		last if /^$/;
+	    }
+	    close FILE;
+	    if (! $spam) {
+		print "Indexable.\n";
+		#system("echo 'index $file' | nc localhost 8010 2>&1 >>/tmp/index.log");
+	    }
+	}
+    }
 }
