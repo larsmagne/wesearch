@@ -1,0 +1,122 @@
+Only in gmime-1.0.6: Makefile
+Only in gmime-1.0.6: TAGS
+Only in gmime-1.0.6: config.h
+Only in gmime-1.0.6: config.log
+Only in gmime-1.0.6: config.status
+Common subdirectories: /tmp/gmime-1.0.6/doc and gmime-1.0.6/doc
+Only in gmime-1.0.6: gmime-config
+diff -u /tmp/gmime-1.0.6/gmime-content-type.c gmime-1.0.6/gmime-content-type.c
+--- /tmp/gmime-1.0.6/gmime-content-type.c	Fri Apr 26 03:18:40 2002
++++ gmime-1.0.6/gmime-content-type.c	Sat Nov 30 17:06:08 2002
+@@ -89,9 +89,6 @@
+ 			mime_type->subtype = g_strdup ("octet-stream");
+ 		}
+ 		
+-		g_warning ("Invalid or incomplete type: %s%s%s: defaulting to %s/%s",
+-			   type ? type : "", subtype ? "/" : "", subtype ? subtype : "",
+-			   mime_type->type, mime_type->subtype);
+ 	}
+ 	
+ 	return mime_type;
+Only in gmime-1.0.6: gmime-content-type.c~
+diff -u /tmp/gmime-1.0.6/gmime-param.c gmime-1.0.6/gmime-param.c
+--- /tmp/gmime-1.0.6/gmime-param.c	Fri Jul 12 03:31:56 2002
++++ gmime-1.0.6/gmime-param.c	Thu Dec  5 04:24:55 2002
+@@ -41,7 +41,7 @@
+ 
+ #include "strlib.h"
+ 
+-#define d(x) x
++#define d(x) 1
+ #define w(x)
+ 
+ extern int gmime_interfaces_utf8;
+@@ -374,7 +374,7 @@
+ 		inptr++;
+ 		value = decode_value (&inptr);
+ 		
+-		if (is_rfc2184) {
++		if (value && is_rfc2184) {
+ 			/* We have ourselves an rfc2184 parameter */
+ 			if (rfc2184_part == -1) {
+ 				/* rfc2184 allows the value to be broken into
+Only in gmime-1.0.6: gmime-param.c~
+diff -u /tmp/gmime-1.0.6/gmime-parser.c gmime-1.0.6/gmime-parser.c
+--- /tmp/gmime-1.0.6/gmime-parser.c	Wed Jul 31 05:20:25 2002
++++ gmime-1.0.6/gmime-parser.c	Mon Dec  9 00:05:02 2002
+@@ -344,7 +344,6 @@
+ 	header->name = g_strndup (parser->headerbuf, hlen);                 \
+ 	g_strstrip (header->name);                                          \
+ 	if (*colon != ':') {                                                \
+-		g_warning ("Invalid header: %s", header->name);             \
+ 		header->value = header->name;                               \
+ 		header->name = g_strdup ("X-Invalid-Header");               \
+ 	} else {                                                            \
+@@ -877,7 +876,7 @@
+ 		if (*found == FOUND_END_BOUNDARY)
+ 			*found = parser_scan_multipart_postface (parser, multipart);
+ 	} else {
+-		g_warning ("multipart without boundary encountered");
++		/* g_warning ("multipart without boundary encountered"); */
+ 		/* this will scan everything into the preface */
+ 		*found = parser_scan_multipart_preface (parser, multipart);
+ 	}
+Only in gmime-1.0.6: gmime-parser.c~
+diff -u /tmp/gmime-1.0.6/gmime-utils.c gmime-1.0.6/gmime-utils.c
+--- /tmp/gmime-1.0.6/gmime-utils.c	Sat Oct 19 04:02:42 2002
++++ gmime-1.0.6/gmime-utils.c	Sat Dec  7 14:23:16 2002
+@@ -44,7 +44,7 @@
+ #include "gmime-iconv-utils.h"
+ #include "unicode.h"
+ 
+-#define d(x)
++#define d(x) 
+ #define w(x) x
+ 
+ #ifndef HAVE_ISBLANK
+@@ -1005,7 +1005,7 @@
+ 	
+ 	inend = in + len;
+ 	outptr = out;
+-	
++
+ 	inptr = in;
+ 	while (inptr < inend) {
+ 		c = *inptr++;
+@@ -1040,7 +1040,7 @@
+ 	
+ 	inptr = in + 2;
+ 	inend = in + inlen - 2;
+-	
++
+ 	inptr = memchr (inptr, '?', inend - inptr);
+ 	if (inptr && inptr[2] == '?') {
+ 		unsigned char *decoded;
+@@ -1151,7 +1151,7 @@
+ 	lwsp = g_string_sized_new (256);
+ 	atom = g_string_sized_new (256);
+ 	inptr = in;
+-	
++
+ 	while (inptr && *inptr) {
+ 		unsigned char c = *inptr++;
+ 		
+Only in gmime-1.0.6: gmime-utils.c~
+Only in gmime-1.0.6: iconv-detect.h
+diff -u /tmp/gmime-1.0.6/internet-address.c gmime-1.0.6/internet-address.c
+--- /tmp/gmime-1.0.6/internet-address.c	Sat Oct 19 04:07:38 2002
++++ gmime-1.0.6/internet-address.c	Sat Nov 30 17:05:03 2002
+@@ -35,7 +35,7 @@
+ #include "gmime-iconv-utils.h"
+ 
+ 
+-#define w(x) x
++#define w(x) 1
+ 
+ 
+ extern int gmime_interfaces_utf8;
+Only in gmime-1.0.6: internet-address.c~
+Only in gmime-1.0.6: libgmime
+Only in gmime-1.0.6: libtool
+Only in gmime-1.0.6: stamp-h
+Common subdirectories: /tmp/gmime-1.0.6/tests and gmime-1.0.6/tests

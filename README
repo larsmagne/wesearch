@@ -11,6 +11,8 @@ tens of millions of messages.
 The requirements for compiling we:search are glib 1.2+ and gmime
 1.0.6+, as well as all the normal GNU tools.
 
+If you use gmime 1.0.6, you should apply the patch included.
+
 A general overview of how it all works is included in the NOTES file.
 
 This package is released under the GNU GPL, a copy of which is included.
