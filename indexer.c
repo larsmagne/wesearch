@@ -61,19 +61,14 @@ int parse_args(int argc, char **argv) {
   return optind;
 }
 
-#define _POSIX_MEMLOCK 1
-
 void lock_and_uid(void) {
-#if _POSIX_MEMLOCK == 1
-/* Unfortunately, FreeBSD does not implement mlockall - see PR kern/43426 */
+  /* Unfortunately, FreeBSD does not implement mlockall - see PR kern/43426 */
   if (mlockall(MCL_FUTURE) == -1) {
     perror("we-index");
-    exit(1);
   }
-#endif
 
-  setuid(500);
   setgid(500);
+  setuid(500);
 }
 
 static time_t last_start_time = 0;
@@ -197,6 +192,9 @@ int main(int argc, char **argv)
 
   if (from_file != NULL) {
     index_from_file(from_file);
+  } else if (1) {
+    //index_directory("/home/larsi/clocc");
+    index_directory("/ispool/datespool");
   } else if (from_stdin != 0) {
     index_from_stdin();
   } else {
