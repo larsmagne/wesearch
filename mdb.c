@@ -114,18 +114,20 @@ void free_some_instance_buffers_1(void) {
   int buffers_to_free = INSTANCE_BUFFER_SIZE / 10;
   time_t now = time(NULL);
   instance_block *ib;
+  int bufferes_freed = 0;
 
   printf("Freeing %d buffers\n", buffers_to_free);
 
   while (buffers_to_free > 0) {
     if (gc_next++ == INSTANCE_BUFFER_SIZE - 1) {
       gc_next = 0;
-      return;
+      break;
     }
 
     ib = &instance_buffer[gc_next];
+    /* We swap out blocks that haven't been used in a minute. */
     if (ib->block_id != 0 &&
-	(now - ib->access_time) > 5) {
+	(now - ib->access_time) > 60) {
 #if DEBUG
       printf("%d is %d old\n", gc_next, (int)(now - ib->access_time));
 #endif
@@ -135,8 +137,15 @@ void free_some_instance_buffers_1(void) {
       bzero(ib->block, BLOCK_SIZE);
       buffers_to_free--;
       allocated_instance_buffers--;
+      bufferes_freed++;
     }
   }
+
+  printf("Freed %d buffers.\n", bufferes_freed);
+
+  /* This will kill interactive performance, but we want
+     throughput. */
+  fsync(instance_file);
 }
 
 /* Calls the freeing function until it finally frees something. */
