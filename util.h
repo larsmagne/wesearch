@@ -17,6 +17,7 @@ int path_to_article_spec(const char *file_name, char *group, int *article);
 void *crealloc(void *ptr, size_t size, size_t old_size);
 void crfree(void *ptr, int size);
 void mem_usage(void);
+int min(int, int);
 
 extern char *news_spool;
 
