@@ -34,6 +34,7 @@ typedef struct {
 
 typedef struct {
   char author[MAX_HEADER_LENGTH];
+  char address[MAX_HEADER_LENGTH];
   char subject[MAX_HEADER_LENGTH];
   char body[MAX_SAVED_BODY_LENGTH];
   time_t time;
