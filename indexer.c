@@ -21,6 +21,7 @@ int total_files = 0;
 time_t start_time = 0;
 static char *news_spool = NEWS_SPOOL;
 static char *from_file = NULL;
+extern char *index_dir;
 
 void index_article(const char* group, int article) {
   char file_name[MAX_FILE_NAME];
@@ -197,6 +198,10 @@ int parse_args(int argc, char **argv) {
     switch (c) {
     case 's':
       news_spool = optarg;
+      break;
+      
+    case 'i':
+      index_dir = optarg;
       break;
       
     case 'f':
