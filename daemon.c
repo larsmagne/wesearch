@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -14,6 +15,7 @@
 
 #include "search.h"
 #include "mdb.h"
+#include "index.h"
 
 union sock {
   struct sockaddr s;
@@ -23,6 +25,7 @@ union sock {
 struct option long_options[] = {
   {"index", 1, 0, 'i'},
   {"help", 1, 0, 'h'},
+  {"port", 1, 0, 'p'},
   {0, 0, 0, 0}
 };
 
@@ -31,17 +34,22 @@ void closedown(int);
 #define BUFFER_SIZE 4096
 
 int server_socket = 0;
+static int port = 8010;
 
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hi:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hi:p:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
     case 'i':
       index_dir = optarg;
+      break;
+      
+    case 'p':
+      port = atoi(optarg);
       break;
       
     case 'h':
@@ -57,7 +65,6 @@ int parse_args(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-  int port = 8010;
   int wsd;
   int addlen, peerlen;
   FILE *client;
@@ -163,6 +170,7 @@ void closedown(int i) {
 
  if (server_socket)
    close(server_socket);
+ soft_flush();
  printf("Closed down at %s", ctime(&now));
  exit(0);
 }
