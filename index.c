@@ -60,6 +60,11 @@ void log_indexed_file(char *group, int article) {
 }
 
 
+void flush_indexed_file(void) {
+  fflush(indexed_files_file);
+}
+
+
 void index_article(const char* group, int article) {
   char file_name[MAX_FILE_NAME];
   const char *g = group;
@@ -129,6 +134,8 @@ int path_to_article_spec(const char *file_name, char *group, int *article) {
 
 void index_word(char *word, int count, int article_id) {
   word_descriptor *wd;
+  
+  /* printf("%s\n", word); */
 
   /* See if the word is in the word table.  If not, enter it. */
   if ((wd = lookup_word(word)) == NULL) {
