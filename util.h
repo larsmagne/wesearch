@@ -13,5 +13,8 @@ int write_from(int fp, char *buf, int size);
 void merror(char *error);
 void read_into(int fd, int block_id, char *block, int block_size);
 void read_block(int fd, char *block, int block_size);
+int path_to_article_spec(const char *file_name, char *group, int *article);
+
+extern char *news_spool;
 
 #endif

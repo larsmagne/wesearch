@@ -18,6 +18,8 @@
 #include <time.h>
 #include <ctype.h>
 
+char *news_spool = NEWS_SPOOL;
+
 /* The same as strcpy, but returns a pointer to the end of the
    destination string. */
 char *mstrcpy(char *dest, char *src) {
@@ -111,5 +113,53 @@ void read_into(int fd, int block_id, char *block, int block_size) {
   }
 
   read_block(fd, block, block_size);
+}
+
+
+/* Convert a file name into a group/article spec. */
+int path_to_article_spec(const char *file_name, char *group, int *article) {
+  char *s = news_spool;
+  char *last_slash = NULL;
+  char c;
+  int art = 0;
+
+  while (*s && *file_name && *s++ == *file_name++)
+    ;
+
+  if (*s || ! *file_name)
+    return 0;
+
+  /* It's common to forget to end the spool dir variable with a
+     trailing slash, so we check for that here, and just ignore a
+     leading slash in a group name. */
+  if (*file_name == '/')
+    file_name++;
+
+  while ((c = *file_name++) != 0) {
+    if (c == '/') {
+      c = '.';
+      last_slash = group;
+    }
+
+    *group++ = c;
+  }
+
+  *group++ = 0;
+
+  if (! last_slash)
+    return 0;
+
+  *last_slash = 0;
+
+  s = last_slash + 1;
+  while ((c = *s++) != 0) {
+    if ((c < '0') || (c > '9'))
+      return 0;
+    art = art * 10 + c - '0';
+  }
+
+  *article = art;
+
+  return 1;
 }
 
