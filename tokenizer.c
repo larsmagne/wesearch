@@ -54,7 +54,7 @@ static document doc;
 static unsigned char downcase[256];
 static GHashTable *table = NULL;
 static GHashTable *stop_words_table = NULL;
-static word_count word_table[MAX_WORDS_PER_DOCUMENT];
+static word_count dword_table[MAX_WORDS_PER_DOCUMENT];
 static char saved_body[MAX_SAVED_BODY_LENGTH];
 static int saved_body_length = 0;
 
@@ -264,8 +264,8 @@ void add_word_to_table(gpointer key, gpointer value, gpointer num_words) {
     return;
   }
   (*((int*)num_words))++;
-  word_table[n].word = (char*) key;
-  word_table[n].count = (int) value;
+  dword_table[n].word = (char*) key;
+  dword_table[n].count = (int) value;
 }
 
 document* parse_file(const char *file_name) {
@@ -300,7 +300,7 @@ document* parse_file(const char *file_name) {
   if (msg != 0) {
     table = g_hash_table_new(g_str_hash, g_str_equal);
     bufp = buffer;
-    word_table[0].word = NULL;
+    dword_table[0].word = NULL;
     bzero(saved_body, MAX_SAVED_BODY_LENGTH);
     saved_body_length = 0;
     author = g_mime_message_get_sender(msg);
@@ -326,14 +326,14 @@ document* parse_file(const char *file_name) {
       strncpy(doc.body, saved_body, MAX_SAVED_BODY_LENGTH);
 
       g_hash_table_foreach(table, add_word_to_table, (gpointer) &num_words);
-      word_table[num_words].word = NULL;
+      dword_table[num_words].word = NULL;
       g_hash_table_destroy(table);
       g_mime_object_unref(GMIME_OBJECT(msg));
     }
   }
   fdatasync(file);
   close(file);
-  doc.words = word_table;
+  doc.words = dword_table;
   doc.num_words = num_words;
 
   return &doc;
