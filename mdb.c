@@ -1139,6 +1139,38 @@ int sort_isearch_results(isearch_result *isr, int nresults) {
     return MAX_SEARCH_RESULTS;
 }
 
+/* Reshuffle the initial results so that the last ones become the
+   first ones. */
+int rearrange_isearch_results(isearch_result *isr, int nresults, int wrapped) {
+  int n = nresults - 1;
+  int total_nresults = nresults + wrapped*MAX_INTERNAL_SEARCH_RESULTS;
+  int todo = (total_nresults > MAX_SEARCH_RESULTS? MAX_SEARCH_RESULTS: 
+	      nresults);
+  int done = 0;
+  isearch_result dummy;
+
+  while (done < todo) {
+    /* Switch places. */
+    dummy.article_id = isr[done].article_id;
+    dummy.goodness = isr[done].goodness;
+
+    isr[done].article_id = isr[n].article_id;
+    isr[done].goodness = isr[n].goodness;
+
+    isr[n].article_id = dummy.article_id;
+    isr[n].goodness = dummy.goodness;
+
+    if (n == 0) {
+      n = MAX_INTERNAL_SEARCH_RESULTS;
+    }
+    n--;
+
+    done++;
+  }
+
+  return done;
+}
+
 
 /* The main search function.  It takes a list of words to search
    for. */
@@ -1152,6 +1184,8 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int ends = 0, nresults = 0;
   int ended = 0;
   int positives = 0;
+  int wrapped = 0;
+  int total_nresults = 0;
 
   fprintf(fdp, "# Articles: %d\n", current_article_id);
 
@@ -1244,17 +1278,26 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
       isearch_results[nresults].article_id = max_article_id;
       isearch_results[nresults].goodness = goodness;
 
+      total_nresults++;
+
       if (nresults++ >= MAX_INTERNAL_SEARCH_RESULTS) {
+	wrapped++;
+	nresults = 0;
+	/*
 	fprintf(fdp, "# Internal-max: %d\n", MAX_INTERNAL_SEARCH_RESULTS);
 	break;
+	*/
       }
     }
   }
 
-  if (nresults >= MAX_SEARCH_RESULTS) {
+  if (total_nresults >= MAX_SEARCH_RESULTS) {
     fprintf(fdp, "# Internal: %d\n", nresults);
     fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
+    /*
     nresults = sort_isearch_results(isearch_results, nresults);
+    */
+    nresults = rearrange_isearch_results(isearch_results, nresults, wrapped);
   }
 
   for (i = 0; i<nresults; i++) {
