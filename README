@@ -1,16 +1,16 @@
-MainDB is a specialized search engine/data base for dealing with huge
+we:search is a specialized search engine/data base for dealing with huge
 mail/news spools.  It's designed to be extremely fast when indexing,
 to allow adding new articles to the index on-the-fly, and uses lots of
 memory.
 
 This is not a general search engine, and if you have less than a few
 hundred thousand messages in your spool, there are other search
-engines that give good results.  MainDB is designed for indexing tens
-of millions of messages.
+engines that give good results.  we:search is designed for indexing
+tens of millions of messages.
 
-The requirements for compiling MainDB are glib 1.2+ and gmime 1.0.6+,
-as well as all the normal GNU tools.
+The requirements for compiling we:search are glib 1.2+ and gmime
+1.0.6+, as well as all the normal GNU tools.
+
+A general overview of how it all works is included in the NOTES file.
 
 This package is released under the GNU GPL, a copy of which is included.
-
-
