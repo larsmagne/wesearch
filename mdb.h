@@ -13,6 +13,7 @@ typedef struct {
   int word_id;
   int *head;
   int *tail;
+  void *w_block;
 } word_descriptor;
 
 typedef struct {
