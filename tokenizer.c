@@ -29,6 +29,10 @@
 #include <fcntl.h>
 #include <ctype.h>
 
+#define O_STREAMING    04000000
+
+#define DEBUG 0
+
 unsigned char *downcase_rule[] =
   {"ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞABCDEFGHIJKLMNOPQRSTUVWXYZ",
    "àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþabcdefghijklmnopqrstuvwxyz"};
@@ -82,10 +86,16 @@ void populate_downcase(void) {
   */
 }
 
+int stop_word_p(const char *word) {
+  if (g_hash_table_lookup(stop_words_table, (gconstpointer)word))
+    return 1;
+  else
+    return 0;
+}
+
 int count_word(const char* word) {
   int count = 0;
-  if (g_hash_table_lookup(stop_words_table,
-			  (gconstpointer)word) == NULL) {
+  if (! stop_word_p(word)) {
     count = (int)g_hash_table_lookup(table, (gconstpointer)word);
     /*
     if (count == 0)
@@ -138,7 +148,7 @@ void save_body_bits(const char *text, int start, int end) {
     if (nl && c == '>')
       save = 0;
     if (save) {
-      if (saved_body_length >= MAX_SAVED_BODY_LENGTH) {
+      if (saved_body_length == MAX_SAVED_BODY_LENGTH - 1) {
 	saved_body[saved_body_length] = 0;
 	return;
       }
@@ -263,16 +273,16 @@ document* parse_file(const char *file_name) {
   int num_words = 0;
   int file;
 
-  /*
+#if DEBUG
   printf("%s\n", file_name);
-  */
+#endif
   
   if ((file = stat(file_name, &stat_buf)) == -1) {
     perror("tokenizer");
     return NULL;
   }
 
-  if ((file = open(file_name, O_RDONLY)) == -1) {
+  if ((file = open(file_name, O_RDONLY|O_STREAMING)) == -1) {
     perror("tokenizer");
     return NULL;
   }
@@ -305,7 +315,7 @@ document* parse_file(const char *file_name) {
 
       g_mime_message_foreach_part(msg, partFound, (gpointer) &tallied_length);
 
-      strcpy(doc.body, saved_body);
+      strncpy(doc.body, saved_body, MAX_SAVED_BODY_LENGTH);
 
       g_hash_table_foreach(table, add_word_to_table, (gpointer) &num_words);
       word_table[num_words].word = NULL;
@@ -313,9 +323,11 @@ document* parse_file(const char *file_name) {
       g_mime_object_unref(GMIME_OBJECT(msg));
     }
   }
+  fdatasync(file);
   close(file);
   doc.words = word_table;
   doc.num_words = num_words;
+
   return &doc;
 }
 
