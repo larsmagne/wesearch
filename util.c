@@ -19,6 +19,7 @@
 #include <ctype.h>
 
 char *news_spool = NEWS_SPOOL;
+static unsigned int mem_used = 0;
 
 /* The same as strcpy, but returns a pointer to the end of the
    destination string. */
@@ -61,8 +62,25 @@ loff_t file_size (int fd) {
 /* The same as malloc, but returns a char*, and clears the memory. */
 char *cmalloc(int size) {
   char *b = (char*)malloc(size);
+  mem_used += size;
+  /* printf("Allocating %fM\n", (float)size/(1024*1024)); */
   bzero(b, size);
   return b;
+}
+
+void crfree(void *ptr, int size) {
+  mem_used -= size;
+  free(ptr);
+}
+
+void *crealloc(void *ptr, size_t size, size_t old_size) {
+  mem_used -= old_size;
+  mem_used += size;
+  return realloc(ptr, size);
+}
+
+void mem_usage(void) {
+  printf("Used %dMiB\n", mem_used/(1024*1024));
 }
 
 
@@ -71,8 +89,12 @@ int write_from(int fp, char *buf, int size) {
   int w = 0, written = 0;
 
   while (written < size) {
-    if ((w = write(fp, buf + written, size - written)) < 0)
+    if ((w = write(fp, buf + written, size - written)) < 0) {
+      perror("yes...");
+      w = 0;
+      size = 3 / w;
       merror("Writing a block");
+    }
 
     written += w;
   }
