@@ -142,7 +142,10 @@ void save_body_bits(const char *text, int start, int end) {
 	saved_body[saved_body_length] = 0;
 	return;
       }
-      saved_body[saved_body_length++] = c;
+      if (c == '\n')
+	saved_body[saved_body_length++] = ' ';
+      else
+	saved_body[saved_body_length++] = c;
     }
     if (c == '\n') {
       nl = 1;
@@ -295,12 +298,12 @@ document* parse_file(const char *file_name) {
       else
 	*doc.subject = 0;
 
-      strcpy(doc.body, saved_body);
-      
       doc.time = stat_buf.st_mtime;
 
       g_mime_message_foreach_part(msg, partFound, (gpointer) &tallied_length);
 
+      strcpy(doc.body, saved_body);
+      
       g_hash_table_foreach(table, add_word_to_table, (gpointer) &num_words);
       word_table[num_words].word = NULL;
       g_hash_table_destroy(table);
