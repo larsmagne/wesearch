@@ -17,7 +17,7 @@
 #if defined(__FreeBSD__)
 #  define INSTANCES_DB_TMP "/var/tmp/instances.db.tmp"
 #else
-#  define INSTANCES_DB_TMP "/opt/tmp/instances.db.tmp"
+#  define INSTANCES_DB_TMP "/mirror/tmp/instances.db.tmp"
 #endif
 
 /* De-fragment the instance table. */
