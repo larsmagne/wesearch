@@ -117,10 +117,8 @@ int allocate_chunking_instance_block(int ibn, int blocks) {
   int first = current_instance_block_number + 1;
   int *block = (int *)cmalloc(BLOCK_SIZE);
 
-  if (ftruncate64(instance_file,
-		  (loff_t)(current_instance_block_number + 2) * BLOCK_SIZE)
-      == -1) {
-    merror("Increasing the instance file size");
+  if (lseek64(instance_file, (loff_t)0, SEEK_END) == -1) {
+    merror("Seeking to the end of the instance file.");
   }
 
   while (blocks-- > 0) {
@@ -540,11 +538,8 @@ word_descriptor *enter_word(char *word) {
     ;
   *((int*) b) = num_word_id++;
   b += 4;
-  // instance_block = allocate_instance_block();
-  //*((int*) b) = instance_block;
   *((int*) b) = 0;
   b += 4;
-  //*((int*) b) = instance_block;
   *((int*) b) = 0;
   b += 4;
 
@@ -634,7 +629,7 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
   if (ib->num_used == INSTANCE_BLOCK_LENGTH) {
     block = ib->block;
 
-    if (1) {
+    if (0) {
       new_instance_block = allocate_instance_block();
       *((int*) block) = new_instance_block;
       *wd->tail = new_instance_block;
@@ -642,11 +637,13 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
       if (*((int*) block) != 0) {
 	/* We have more pre-allocated blocks in this chunk, so we just
 	   set the tail to point to the next block in the chunk. */
+	//printf("%s to preallocated block\n", wd->word);
 	*wd->tail = *((int*) block);
       } else {
 	/* No more blocks in this chunk, so we allocate a new chunk and
 	   update the tail pointer to point to the first block in this
 	   new chunk. */
+	//printf("%s allocating new chunk\n", wd->word);
 	new_instance_block =
 	  allocate_chunking_instance_block(*wd->tail, 128);
 	*((int*) block) = new_instance_block;
