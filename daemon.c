@@ -23,6 +23,7 @@ union sock {
 };
 
 struct option long_options[] = {
+  {"spool", 1, 0, 's'},
   {"index", 1, 0, 'i'},
   {"help", 1, 0, 'h'},
   {"port", 1, 0, 'p'},
@@ -39,13 +40,17 @@ static int port = 8010;
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hi:p:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hs:i:p:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
     case 'i':
       index_dir = optarg;
+      break;
+      
+    case 's':
+      news_spool = optarg;
       break;
       
     case 'p':
@@ -83,6 +88,7 @@ int main(int argc, char **argv) {
 
   mdb_init();
   tokenizer_init();
+  indexer_init();
 
   if (signal(SIGHUP, closedown) == SIG_ERR) {
     perror("Signal");
@@ -142,16 +148,21 @@ int main(int argc, char **argv) {
       printf("%d '%s'\n", i, expression[i]);
     }
 
-    if (nitems > 1) {
+    if (nitems >= 1) {
       if (!strcmp(expression[0], "search")) {
 	printf("Searching...\n");
 	search(expression + 1, wsd);
       } else if (!strcmp(expression[0], "index")) {
 	printf("Indexing...\n");
 	index_file(expression[1]);
+	/*
 	if (! (nfiles_indexed++ % 100)) {
 	  soft_flush();
 	}
+	*/
+      } else if (!strcmp(expression[0], "flush")) {
+	printf("Flushing...\n");
+	soft_flush();
       }
     }
 
@@ -159,7 +170,7 @@ int main(int argc, char **argv) {
     close(wsd);
 
     time(&now);
-    printf("Connection closed at %s",ctime(&now));
+    printf("Connection closed at %s", ctime(&now));
   }
 
   exit(1);
