@@ -1,0 +1,26 @@
+AC_INIT(config.h)
+AC_SET_MAKE
+AC_PROG_CC
+AC_ARG_PROGRAM
+AC_ISC_POSIX
+
+dnl Checks for header files.
+AC_CHECK_HEADERS(sys/mman.h)
+AC_CHECK_HEADERS(string.h)
+AC_CHECK_HEADERS(stdlib.h)
+AC_CHECK_HEADERS(ctype.h)
+AC_CHECK_HEADERS(time.h)
+AC_CHECK_HEADERS(alloca.h)
+
+AC_CHECK_FUNCS(memchr memrchr memmem strlen strcpy strncpy strlcpy stpcpy strcat strncat strlcat strchr strrchr strnstr strstr strncasestr strcasestr strncasecmp strcasecmp)
+	
+dnl We need at *least* glib 1.2.0
+AM_PATH_GLIB(1.2.0, ,
+             AC_MSG_ERROR(Cannot find GLIB: Is glib-config in path?))
+
+glib_cflags="$GLIB_CFLAGS"
+glib_libs="$GLIB_LIBS"
+AC_SUBST(glib_cflags)
+AC_SUBST(glib_libs)
+
+AC_OUTPUT(Makefile)

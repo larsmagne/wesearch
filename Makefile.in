@@ -1,7 +1,6 @@
-# Generated automatically from Makefile.in by configure.
-GLIB_CFLAGS = -I/usr/include/glib-1.2 -I/usr/lib/glib/include
-GLIB_CONFIG = /usr/bin/glib-config
-GLIB_LIBS = -L/usr/lib -lglib
+GLIB_CFLAGS = @GLIB_CFLAGS@
+GLIB_CONFIG = @GLIB_CONFIG@
+GLIB_LIBS = @GLIB_LIBS@
 
 CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -I/usr/local/include
 LDFLAGS+=-L/usr/local/lib -lgmime -lglib
