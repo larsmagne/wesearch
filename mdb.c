@@ -45,6 +45,23 @@ static char *reverse_group_table[MAX_GROUPS];
 static int allocated_instance_buffers = 0;
 static int gc_next = 0;
 char *index_dir = INDEX_DIRECTORY;
+int total_single_word_instances = 0;
+static int total_word_instances = 0;
+
+#define article_id(id) ((id) & 0xfffffff)
+
+#define count_id(id) (((unsigned int)id) >> 28)
+
+#if 0
+unsigned int article_id(unsigned int spec) {
+  return spec & 0xffffff;
+}
+
+unsigned int count_id(unsigned int spec) {
+  return spec >> 28;
+}
+#endif
+
 
 void merror(char *error) {
   perror(error);
@@ -131,7 +148,8 @@ void free_some_instance_buffers_1(void) {
 #if DEBUG
       printf("%d is %d old\n", gc_next, (int)(now - ib->access_time));
 #endif
-      flush_instance_block(ib);
+      if (ib->dirty)
+	flush_instance_block(ib);
       instance_table[ib->block_id] = 0;
       ib->block_id = 0;
       bzero(ib->block, BLOCK_SIZE);
@@ -394,13 +412,13 @@ word_descriptor *block_search_word(const char *word, const char *word_block) {
       dword.word = word;
       dword.word_id = *((int*)b);
       b += 4;
-      dword.head = *((int*)b);
+      dword.head = ((int*)b);
       b += 4;
       dword.tail = ((int*)b);
       b += 4;
 #if DEBUG
       printf("Found %s, %d, %d, %x\n",
-	     dword.word, dword.word_id, dword.head, (int)&dword.tail);
+	     dword.word, dword.word_id, (int)&dword.head, (int)&dword.tail);
 #endif
       return &dword;
     } else {
@@ -478,7 +496,7 @@ word_descriptor *enter_word(char *word) {
   int last_word;
   char *b, *w = word;
   char *new_block;
-  int instance_block;
+  //int instance_block;
 
   if (word_block == NULL)
     word_block = allocate_word_block(word);
@@ -526,10 +544,12 @@ word_descriptor *enter_word(char *word) {
     ;
   *((int*) b) = num_word_id++;
   b += 4;
-  instance_block = allocate_instance_block();
-  *((int*) b) = instance_block;
+  // instance_block = allocate_instance_block();
+  //*((int*) b) = instance_block;
+  *((int*) b) = 0;
   b += 4;
-  *((int*) b) = instance_block;
+  //*((int*) b) = instance_block;
+  *((int*) b) = 0;
   b += 4;
 
   set_last_word((short*) word_block, b - word_block - BLOCK_HEADER_SIZE);
@@ -546,10 +566,42 @@ word_descriptor *enter_word(char *word) {
 /* Enter a word instance into the instance table. */
 void enter_instance(unsigned int article_id, word_descriptor *wd,
 		    unsigned int count) {
-  instance_block *ib = get_instance_block(*wd->tail);
-  char *block = ib->block;
+  instance_block *ib;
+  char *block;
   unsigned int tmp = article_id;
   int new_instance_block;
+  unsigned int prev;
+  int nib;
+
+  /* The idea here is that we don't allocate instance blocks for words
+     unless we have two instances of the word.  For the first
+     instance, we cheat by letting *wd->head be zero, and has the
+     article_id/count in the tail. */
+  if (*wd->head) {
+    /* Normal, blocked-out instance. */
+    ib = get_instance_block(*wd->tail);
+    block = ib->block;
+  } else if (*wd->tail) {
+    /* We had a zero head, but a non-zero tail, so this instance is
+       the second instance of this word.  We need to allocate an
+       instance block, put the first instance into the block, and then
+       put this instance into the block. */
+    prev = *wd->tail;
+    nib = allocate_instance_block();
+    *wd->head = nib;
+    *wd->tail = nib;
+    enter_instance(article_id(prev), wd, count_id(prev));
+    ib = get_instance_block(*wd->tail);
+    block = ib->block;
+    total_single_word_instances--;
+  } else {
+    /* This is the first instance of the word.  We just put it in the
+       tail pointer. */
+    total_single_word_instances++;
+    tmp |= (count << 28);
+    *wd->tail = tmp;
+    return;
+  }
 
   /* Go to the end of the block. */
   block += INSTANCE_BLOCK_HEADER_SIZE;
@@ -927,6 +979,7 @@ typedef struct {
   int negate_p;
   int word_id;
   instance_block *instance;
+  int sarticle_id;
   int next;
 } search_item;
 
@@ -950,16 +1003,25 @@ void dump_instances(instance_block *ib) {
     block = (int*) ib->block;
     next_block = *block++;
     for (i = 0; i<INSTANCE_BLOCK_LENGTH; i++) {
+#if DEBUG
       printf("%x ", block[i]);
+#endif
       if (block[i])
 	total++;
     }
+#if DEBUG
     printf("\n");
     printf("num_used: %d\n", ib->num_used);
+#endif
     if (next_block)
       ib = get_instance_block(next_block);
     else {
+      if (total == 1)
+	total_single_word_instances++;
+      total_word_instances++;
+#if DEBUG
       printf("Total instances: %d\n", total);
+#endif
       return;
     }
   }
@@ -970,8 +1032,11 @@ void dump_instances(instance_block *ib) {
 unsigned int next_instance(search_item *si) {
   unsigned int result;
 
-  if (!si->instance)
-    return 0;
+  if (!si->instance) {
+    result = si->sarticle_id;
+    si->sarticle_id = 0;
+    return result;
+  }
 
   /* INSTANCE_BLOCK_LENGTH */
   if (si->next == INSTANCE_BLOCK_LENGTH) {
@@ -983,7 +1048,9 @@ unsigned int next_instance(search_item *si) {
   }
 
   if (si->next > si->instance->num_used) {
+#if DEBUG
     printf("next is %d, num used is %d.\n", si->next, si->instance->num_used);
+#endif
     return 0;
   }
 
@@ -992,21 +1059,6 @@ unsigned int next_instance(search_item *si) {
 
   return result;
 }
-
-#define article_id(id) ((id) & 0xfffffff)
-
-#define count_id(id) (((unsigned int)id) >> 28)
-
-#if 0
-unsigned int article_id(unsigned int spec) {
-  return spec & 0xffffff;
-}
-
-unsigned int count_id(unsigned int spec) {
-  return spec >> 28;
-}
-#endif
-
 
 /* Skip past all instances that have an article id less than the
    specified one. */
@@ -1113,6 +1165,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int max_article_id, aid, sid;
   int matches, goodness;
   int ends = 0, nresults = 0;
+  int ended = 0;
 
   fprintf(fdp, "# Articles: %d\n", current_article_id);
 
@@ -1141,7 +1194,10 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     } else {
       if ((wd = lookup_word(si->word)) != NULL) {
 	si->word_id = wd->word_id;
-	si->instance = get_instance_block(wd->head);
+	if (*wd->head)
+	  si->instance = get_instance_block(*wd->head);
+	else
+	  si->sarticle_id = *wd->tail;
 #if DEBUG
 	printf("Found %s: id %d\n", si->word, si->word_id);
 #endif
@@ -1157,7 +1213,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   if (ne == 0)
     return NULL;
 
-  while (ends < ne) {
+  while (! ended) {
     max_article_id = 0;
     for (i = 0; i<ne; i++) {
       aid = article_id(next_instance(&search_items[i]));
@@ -1186,8 +1242,10 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
 	if (si->negate_p == 0)
 	  si->next++;
       }
-      if (aid == 0) 
+      if (aid == 0 && si->negate_p == 0) {
+	ended = 1;
 	ends++;
+      }
     }
     
     if (matches == ne && ends != ne) {
@@ -1221,4 +1279,64 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   sort_search_results(search_results, nresults);
   *nres = nresults;
   return search_results;
+}
+
+
+void block_dump_word(const char *word_block) {
+  const char *b = word_block + BLOCK_HEADER_SIZE; /* Skip past the header. */
+  int head;
+
+  while (TRUE) {
+    if (*b == 0) {
+      /* We have reached the end of the block; check whether it's the
+	 last block. */
+      if (*((int*)word_block) != 0) {
+	/* printf("Going to the next block, %d.\n", *((int*)word_block)); */
+	word_block = word_extension_table[*((int*)word_block)];
+	if (word_block == NULL) {
+	  printf("Went to a non-existing block.\n");
+	  exit(1);
+	}
+	b = word_block + BLOCK_HEADER_SIZE;
+      } else 
+	return;
+    }
+
+    if (word_block == NULL) {
+      printf("Went to a non-existing block here.\n");
+      exit(1);
+    } 
+
+#if DEBUG
+    printf("Word: %s\n", b);
+#endif
+    while (*b++)
+      ;
+
+    b += 4;
+    head = *((int*)b);
+    b += 4;
+    b += 4;
+    dump_instances(get_instance_block(head));
+  }
+}
+
+
+void dump_statistics(void) {
+  int i;
+  char *block;
+
+  for (i = 0; i<WORD_SLOTS; i++) {
+    if ((block = (char*)word_table[i]) != NULL) {
+      block_dump_word(block);
+      if (! (total_word_instances % 1))
+	printf("Total words: %d, total single-instance words: %d\n", 
+	       total_word_instances,
+	       total_single_word_instances);
+    }
+  }
+  printf("Total words: %d, total single-instance words: %d\n", 
+	 total_word_instances,
+	 total_single_word_instances);
+
 }
