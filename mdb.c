@@ -49,6 +49,7 @@ char *index_dir = INDEX_DIRECTORY;
 int total_single_word_instances = 0;
 static int total_word_instances = 0;
 int ninstance_blocks_read = 0;
+int is_indexing_p = 0;
 
 #define article_id(id) ((id) & 0xfffffff)
 
@@ -112,10 +113,33 @@ int allocate_instance_block(void) {
   return current_instance_block_number;
 }
 
+int allocate_chunking_instance_block(int ibn, int blocks) {
+  int first = current_instance_block_number + 1;
+  int *block = (int *)cmalloc(BLOCK_SIZE);
+
+  if (ftruncate64(instance_file,
+		  (loff_t)(current_instance_block_number + 2) * BLOCK_SIZE)
+      == -1) {
+    merror("Increasing the instance file size");
+  }
+
+  while (blocks-- > 0) {
+    current_instance_block_number++;
+    if (blocks > 0)
+      *block = current_instance_block_number + 1;
+    else
+      *block = 0;
+    write_from(instance_file, (char *)block, BLOCK_SIZE);
+  }
+
+  free(block);
+  return first;
+}
+
 /* Allocate a new, fresh word extension block. */
 int allocate_extension_block(void) {
   if (ftruncate64(word_extension_file,
-		  (loff_t)(num_word_extension_blocks + 1) * BLOCK_SIZE) == -1) 
+		  (loff_t)(num_word_extension_blocks + 1) * WORD_BLOCK_SIZE) == -1) 
     merror("Increasing the word extension file");
   
   return num_word_extension_blocks;
@@ -139,9 +163,13 @@ void free_some_instance_buffers_1(void) {
     }
 
     ib = &instance_buffer[gc_next];
-    /* We swap out blocks that haven't been used in a minute. */
+    /* We swap out blocks that haven't been used in a while. */
     if (ib->block_id != 0 &&
-	(now - ib->access_time) > 60) {
+	/* Either this is a block with a next pointer, which means that
+	   we don't need it any more... */
+	((is_indexing_p && ib->num_used == INSTANCE_BLOCK_LENGTH) || 
+	 /* Or it hasn't been used in a long time. */
+	 ((now - ib->access_time) > 60 * 5))) {
 #if DEBUG
       printf("%d is %d old\n", gc_next, (int)(now - ib->access_time));
 #endif
@@ -328,7 +356,7 @@ int hash(const char *word) {
 /* malloc a new, fresh word block. */
 char *allocate_word_block(const char *word) {
   int slot_number = hash(word);
-  char *block = cmalloc(BLOCK_SIZE);
+  char *block = cmalloc(WORD_BLOCK_SIZE);
 
   if (block == NULL) {
     perror("chow-indexer");
@@ -483,12 +511,12 @@ word_descriptor *enter_word(char *word) {
      this word. */
   last_word = get_last_word((short*)word_block);
   if ((BLOCK_HEADER_SIZE + last_word +
-       strlen(word) + 3*sizeof(int) + 1 + 1) > BLOCK_SIZE) {
+       strlen(word) + 3*sizeof(int) + 1 + 1) > WORD_BLOCK_SIZE) {
     /* There's no room in this block, so we add a new block. */
-    printf("Allocating an extension block for %s: %d\n",
-	   word, num_word_extension_blocks);
+    /* printf("Allocating an extension block for %s: %d\n",
+       word, num_word_extension_blocks); */
     
-    new_block = cmalloc(BLOCK_SIZE);
+    new_block = cmalloc(WORD_BLOCK_SIZE);
     
     if (new_block == NULL) {
       perror("chow-indexer");
@@ -604,10 +632,27 @@ void enter_instance(unsigned int article_id, word_descriptor *wd,
   /* If we've now filled this block, we allocate a new one, and hook
      it onto the end of this chain. */
   if (ib->num_used == INSTANCE_BLOCK_LENGTH) {
-    new_instance_block = allocate_instance_block();
     block = ib->block;
-    *((int*) block) = new_instance_block;
-    *wd->tail = new_instance_block;
+
+    if (1) {
+      new_instance_block = allocate_instance_block();
+      *((int*) block) = new_instance_block;
+      *wd->tail = new_instance_block;
+    } else {
+      if (*((int*) block) != 0) {
+	/* We have more pre-allocated blocks in this chunk, so we just
+	   set the tail to point to the next block in the chunk. */
+	*wd->tail = *((int*) block);
+      } else {
+	/* No more blocks in this chunk, so we allocate a new chunk and
+	   update the tail pointer to point to the first block in this
+	   new chunk. */
+	new_instance_block =
+	  allocate_chunking_instance_block(*wd->tail, 128);
+	*((int*) block) = new_instance_block;
+	*wd->tail = new_instance_block;
+      }
+    }
     dirty_block(wd->w_block);
   }
 }
@@ -637,7 +682,7 @@ void mdb_init(void) {
 			O_RDWR|O_CREAT, 0644)) == -1)
     merror("Opening the word file");
 
-  if (ftruncate64(word_file, (loff_t)WORD_SLOTS * BLOCK_SIZE) == -1) 
+  if (ftruncate64(word_file, (loff_t)WORD_SLOTS * WORD_BLOCK_SIZE) == -1) 
     merror("Truncating the word file");
 
   group_table = g_hash_table_new(g_str_hash, g_str_equal);
@@ -769,11 +814,11 @@ void flush_instance_table(void) {
 
 /* Flush the word table to disk. */
 void flush_word_block(char *block, int block_number) {
-  if (lseek64(word_file, (loff_t)block_number * BLOCK_SIZE, SEEK_SET) == -1) 
+  if (lseek64(word_file, (loff_t)block_number * WORD_BLOCK_SIZE, SEEK_SET) == -1) 
     merror("Flushing a word block");
 
   clean_block(block);
-  write_from(word_file, block, BLOCK_SIZE);
+  write_from(word_file, block, WORD_BLOCK_SIZE);
   if (shutting_down_p)
     free(block);
 }
@@ -792,10 +837,10 @@ void flush_word_table(void) {
 
 /* Flush the extension word table to disk. */
 void flush_word_extension_block(char *block, int block_number) {
-  if (lseek64(word_extension_file, (loff_t)block_number * BLOCK_SIZE, SEEK_SET) == -1) 
+  if (lseek64(word_extension_file, (loff_t)block_number * WORD_BLOCK_SIZE, SEEK_SET) == -1) 
     merror("Flushing a word extension block");
 
-  write_from(word_extension_file, block, BLOCK_SIZE);
+  write_from(word_extension_file, block, WORD_BLOCK_SIZE);
   clean_block(block);
   if (shutting_down_p)
     free(block);
@@ -858,16 +903,10 @@ void read_group_table(void) {
 /* Find out what the next article_id is supposed to be by looking at
    the size of the article file. */
 void read_next_article_id(void) {
-  struct stat64 stat_buf;
-  unsigned int size;
+  loff_t size = file_size(article_file);
   
-  if (fstat64(article_file, &stat_buf) == -1)
-    merror("Statting the article file");
-
-  size = stat_buf.st_size;
-
   if ((size % ARTICLE_SIZE) != 0) {
-    printf("Invalid size for the article file (%d) for this article size (%d).\n",
+    printf("Invalid size for the article file (%Ld) for this article size (%d).\n",
 	   size, ARTICLE_SIZE);
     exit(1);
   }
@@ -900,9 +939,9 @@ void read_word_table(void) {
 
   for (i = 0; i<WORD_SLOTS; i++) {
     if (block == NULL)
-      block = cmalloc(BLOCK_SIZE);
+      block = cmalloc(WORD_BLOCK_SIZE);
 
-    read_block(word_file, block, BLOCK_SIZE);
+    read_block(word_file, block, WORD_BLOCK_SIZE);
     if (get_last_word((short*)block)) {
       /* This is a non-empty word block, so we store it in the
          table. */
@@ -924,12 +963,12 @@ void read_word_extension_table(void) {
   int i;
   loff_t size = file_size(word_extension_file);
   
-  if ((size % BLOCK_SIZE) != 0) {
+  if ((size % WORD_BLOCK_SIZE) != 0) {
     printf("Invalid size for the word extension file (%Ld) for this block size (%d).\n",
-	   size, BLOCK_SIZE);
+	   size, WORD_BLOCK_SIZE);
     exit(1);
   }
-  num_word_extension_blocks = (int)(size / BLOCK_SIZE);
+  num_word_extension_blocks = (int)(size / WORD_BLOCK_SIZE);
 
 #if DEBUG
   printf("Number of word extension blocks: %d\n", num_word_extension_blocks);
@@ -937,8 +976,8 @@ void read_word_extension_table(void) {
   
   lseek64(word_extension_file, (loff_t)0, SEEK_SET);
   for (i = 0; i<num_word_extension_blocks; i++) {
-    block = cmalloc(BLOCK_SIZE);
-    read_block(word_extension_file, block, BLOCK_SIZE);
+    block = cmalloc(WORD_BLOCK_SIZE);
+    read_block(word_extension_file, block, WORD_BLOCK_SIZE);
     word_extension_table[i] = block;
   }
 
@@ -977,13 +1016,12 @@ void dump_instances(instance_block *ib) {
     block = (int*) ib->block;
     next_block = *block++;
     for (i = 0; i<INSTANCE_BLOCK_LENGTH; i++) {
-#if DEBUG
-      printf("%x ", block[i]);
-#endif
-      if (block[i])
+      if (block[i]) {
+	printf("%x ", block[i]);
 	total++;
+      }
     }
-#if DEBUG
+#if 1
     printf("\n");
     printf("num_used: %d\n", ib->num_used);
 #endif
@@ -1327,11 +1365,10 @@ void block_dump_word(const char *word_block) {
       exit(1);
     } 
 
-#if DEBUG
-    printf("Word: %s\n", b);
-#endif
     while (*b++)
       ;
+
+    printf("Word: %s\n", b);
 
     b += 4;
     head = *((int*)b);
@@ -1349,10 +1386,6 @@ void dump_statistics(void) {
   for (i = 0; i<WORD_SLOTS; i++) {
     if ((block = (char*)word_table[i]) != NULL) {
       block_dump_word(block);
-      if (! (total_word_instances % 1))
-	printf("Total words: %d, total single-instance words: %d\n", 
-	       total_word_instances,
-	       total_single_word_instances);
     }
   }
   printf("Total words: %d, total single-instance words: %d\n", 
