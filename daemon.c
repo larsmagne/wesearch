@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
   struct sockaddr_in sin, caddr;
   int nitems = 0;
   static int so_reuseaddr = TRUE;
-  int dirn;
+  int dirn, i;
 
   dirn = parse_args(argc, argv);
 
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  if (listen(server_socket, 0) == -1) {
+  if (listen(server_socket, 120) == -1) {
     perror("Bad listen");
     exit(1);
   }
@@ -132,9 +132,19 @@ int main(int argc, char **argv) {
     peerlen = sizeof(struct sockaddr);
 
     time(&now);
-    client = fdopen(wsd, "r+");
 
+    /*
+    client = fdopen(wsd, "r+");
     fgets(buffer, BUFFER_SIZE, client);
+    */
+    
+    i = 0;
+    while (read(wsd, buffer+i, 1) == 1 &&
+	   *(buffer+i) != '\n' &&
+	   i++ < BUFFER_SIZE)
+      ;
+    if (*(buffer+i) == '\n')
+      *(buffer+i+1) = 0;
 
     printf("Got %s", buffer);
 
@@ -162,7 +172,9 @@ int main(int argc, char **argv) {
       }
     }
 
+    /*
     fclose(client);
+    */
     close(wsd);
 
     time(&now);
