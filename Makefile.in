@@ -7,11 +7,11 @@ LDFLAGS+=-L/usr/local/lib -lgmime -lglib
 
 all: indexer
 
-tokenizer.o: tokenizer.c tokenizer.h
+tokenizer.o: tokenizer.c tokenizer.h config.h
 
-mdb.o: mdb.c mdb.h config.h tokenizer.h
+mdb.o: mdb.c mdb.h config.h tokenizer.h config.h
 
-indexer.o: indexer.c indexer.h tokenizer.h
+indexer.o: indexer.c indexer.h tokenizer.h config.h
 
 indexer: indexer.o mdb.o tokenizer.o 
 	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o
