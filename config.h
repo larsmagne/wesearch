@@ -19,6 +19,7 @@
    leaps and bounds when doing indexing, and has a size pretty much
    correlated with the size of the number of documents. */
 #define INSTANCE_FILE "instances.db"
+#define NEW_INSTANCE_FILE "instances.db.tmp"
 
 /* The file where some information about articles is stored. */
 #define ARTICLE_FILE "articles.db"
