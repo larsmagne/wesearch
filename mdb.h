@@ -24,7 +24,6 @@ typedef struct {
   char *block;
 } instance_block;
 
-
 word_descriptor *enter_word(char *word);
 word_descriptor *lookup_word(const char *word);
 void mdb_init(void);
