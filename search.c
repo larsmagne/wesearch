@@ -36,7 +36,8 @@ void search(char **expressions, int fd) {
 
   fprintf(fdp, "# Elapsed: %Lf\n", t2 - t1);
 
-  print_search_results(sr, nresults, fdp);
+  if (sr)
+    print_search_results(sr, nresults, fdp);
 
   fflush(fdp);
 }
