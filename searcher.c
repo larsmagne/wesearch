@@ -13,6 +13,8 @@
 #include <dirent.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
+#include "search.h"
 
 #define MAX_FILE_NAME 1024
 
@@ -25,7 +27,7 @@ int parse_args(int argc, char **argv) {
 
     switch (c) {
     case 'h':
-      printf ("Usage: we:search [--spool <directory>] <directories ...>\n");
+      printf ("Usage: we-search [--spool <directory>] <directories ...>\n");
       break;
 
     default:
@@ -36,16 +38,13 @@ int parse_args(int argc, char **argv) {
   return optind;
 }
 
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   int opts;
-
   opts = parse_args(argc, argv);
   
   mdb_init();
-  mdb_search(argv + opts);
+  tokenizer_init();
+
+  search(argv + opts);
   exit(0);
 }
-
-  
