@@ -23,13 +23,12 @@
  */
 
 #include "tokenizer.h"
+#include "config.h"
 #include "stop_words.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <ctype.h>
-
-#define O_STREAMING    04000000
 
 #define DEBUG 0
 
