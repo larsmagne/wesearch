@@ -55,3 +55,31 @@ loff_t file_size (int fd) {
   return stat_buf.st_size;
 }
 
+
+/* The same as malloc, but returns a char*, and clears the memory. */
+char *cmalloc(int size) {
+  char *b = (char*)malloc(size);
+  bzero(b, size);
+  return b;
+}
+
+
+/* Write a block to a file. */
+int write_from(int fp, char *buf, int size) {
+  int w = 0, written = 0;
+
+  while (written < size) {
+    if ((w = write(fp, buf + written, size - written)) < 0)
+      merror("Writing a block");
+
+    written += w;
+  }
+  return written;
+}
+
+
+void merror(char *error) {
+  perror(error);
+  exit(1);
+}
+
