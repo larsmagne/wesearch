@@ -833,12 +833,16 @@ void flush_word_extension_table(void) {
 
 
 /* Flush everything to disk. */
-void flush(void) {
-  shutting_down_p = 1;
+void soft_flush(void) {
   flush_word_table();
   flush_word_extension_table();
   flush_instance_table();
   flush_group_table();
+}
+
+void flush(void) {
+  shutting_down_p = 1;
+  soft_flush();
 }
 
 
