@@ -40,5 +40,6 @@ void read_group_table(void);
 void read_next_article_id(void);
 void read_word_table(void);
 void read_next_instance_block_number(void);
+void read_word_extension_table(void);
 
 #endif
