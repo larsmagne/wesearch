@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <stdlib.h>
 
 #define DEBUG 0
 
@@ -271,25 +272,40 @@ void add_word_to_table(gpointer key, gpointer value, gpointer num_words) {
   dword_table[n].count = (int) value;
 }
 
+void downcase_string (char *string) {
+  unsigned char c, newc;
+  while ((c = *string) != 0) {
+    newc = downcase[c];
+    if (newc != 0)
+      *string = newc;
+    string++;
+  }
+}
+
 document* parse_file(const char *file_name) {
   int tallied_length = 0;
   GMimeStream *stream;
   GMimeMessage *msg = 0;
-  struct stat stat_buf;
+  // struct stat stat_buf;
   const char *author, *subject;
   time_t date;
   int offset;
   int num_words = 0;
   int file;
+  InternetAddress *iaddr;
+  InternetAddressList *iaddr_list;
+  char *address;
 
 #if DEBUG
   printf("%s\n", file_name);
 #endif
-  
+
+  /*
   if ((file = stat(file_name, &stat_buf)) == -1) {
     perror("tokenizer");
     return NULL;
   }
+  */
 
   if ((file = open(file_name, O_RDONLY|O_STREAMING)) == -1) {
     perror("tokenizer");
@@ -313,8 +329,23 @@ document* parse_file(const char *file_name) {
       if (author) {
 	tallied_length = tally_string(author, tallied_length);
 	strncpy(doc.author, author, MAX_HEADER_LENGTH-1);
-      } else
+
+	/* Get the address from the From header. */
+	if ((iaddr_list = internet_address_parse_string(author)) != NULL) {
+	  iaddr = iaddr_list->address;
+	  internet_address_set_name(iaddr, NULL);
+	  address = internet_address_to_string(iaddr, FALSE);
+	  strncpy(doc.address, address, MAX_HEADER_LENGTH-1);
+	  downcase_string(doc.address);
+	  free(address);
+	  internet_address_list_destroy(iaddr_list);
+	} else {
+	  *doc.address = 0;
+	}
+      } else {
 	*doc.author = 0;
+	*doc.address = 0;
+      }
 
       if (subject) {
 	tallied_length = tally_string(subject, tallied_length);
