@@ -307,6 +307,7 @@ document* parse_file(const char *file_name) {
   }
   */
 
+  // |O_STREAMING
   if ((file = open(file_name, O_RDONLY|O_STREAMING)) == -1) {
     perror("tokenizer");
     return NULL;
