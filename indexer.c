@@ -18,11 +18,15 @@
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hs:f:i:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hds:f:i:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
+    case 'd':
+      suppress_duplicate_files = 1;
+      break;
+
     case 's':
       news_spool = optarg;
       break;
@@ -112,7 +116,7 @@ int main(int argc, char **argv)
 
   /* Initialize key/data structures. */
   tokenizer_init();
-
+  indexer_init();
   mdb_init();
 
   if (from_file != NULL) {
