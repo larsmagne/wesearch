@@ -49,5 +49,6 @@ typedef struct {
 
 document* parse_file(const char *file_name);
 void tokenizer_init(void);
+int stop_word_p(const char *word);
 
 #endif
