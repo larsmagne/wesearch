@@ -6,6 +6,7 @@
 
 void soft_flush(void);
 int index_file(const char *file_name);
+int index_unnamed_file(const char *file_name);
 void indexer_init(void);
 void read_indexed_files_table(void);
 void flush_indexed_file(void);
