@@ -59,8 +59,15 @@ void flush_instance_block(instance_block *ib);
 void print_search_results(search_result *sr, int nresults, FILE *fdp);
 void dump_statistics(void);
 void defragment_instance_table(void);
+int swap_in_instance_blocks(word_descriptor *wd);
+instance_block *get_instance_block(int block_id);
+void dirty_block(char *block);
 
 extern char *index_dir;
 extern int total_single_word_instances;
+extern int instance_buffer_size;
+extern void *word_extension_table[];
+extern void *word_table[];
+extern int ninstance_blocks_read;
 
 #endif
