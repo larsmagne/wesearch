@@ -126,6 +126,8 @@ int index_file(const char *file_name) {
   char group[MAX_FILE_NAME];
   int article_id = 0;
 
+  now_time = time(NULL);
+
   /* printf("%s\n", file_name);  */
   if (path_to_article_spec(file_name, group, &article)) {
 
@@ -164,6 +166,43 @@ int index_file(const char *file_name) {
   return 0;
 }
 
+int index_unnamed_file(const char *file_name) {
+  document *doc;
+  word_count *words;
+  int count;
+  int article_id = 0;
+
+  if ((doc = parse_file(file_name)) == NULL)
+    return 0;
+
+  now_time = time(NULL);
+
+  log_indexed_file(doc->group, doc->article);
+
+  /* We ignore documents that have more than MAX_DISTINCT_WORDS.  They
+     are probably bogus. */
+  if (doc != NULL && doc->num_words <= MAX_DISTINCT_WORDS) {
+    article_id = enter_article(doc, doc->group, doc->article);
+    words = doc->words;
+    while (words->word) {
+      count = words->count;
+      index_word(words->word, words->count, article_id);
+      words++;
+    }
+
+    /* Add this article to the list for this group. */
+    index_word(doc->group, 1, article_id);
+
+    if (*(doc->address) &&
+	!strstr(doc->address, "public.gmane.org")) {
+      index_word(doc->address, 1, article_id);
+    }
+
+    return doc->num_words;
+  }
+  return 0;
+}
+
 void index_directory(const char* dir_name) {
   DIR *dirp;
   struct dirent *dp;
@@ -172,12 +211,14 @@ void index_directory(const char* dir_name) {
   time_t elapsed;
   int total_words = 0;
 
-  printf("%s\n", dir_name); 
-    
-  dirp = opendir(dir_name);
+  //printf("%s\n", dir_name); 
+
+  if ((dirp = opendir(dir_name)) == NULL) {
+    perror("indexer");
+    return;
+  }
     
   while ((dp = readdir(dirp)) != NULL) {
-
     snprintf(file_name, sizeof(file_name), "%s/%s", dir_name,
 	     dp->d_name);
 
@@ -192,9 +233,17 @@ void index_directory(const char* dir_name) {
       if (S_ISDIR(stat_buf.st_mode)) 
 	index_directory(file_name);
       else if (is_number(dp->d_name)) {
-	total_words += index_file(file_name);
+	total_words += index_unnamed_file(file_name);
 
 	if (! (total_files++ % 1000)) {
+	  /*
+	  if (total_files > 1000000) {
+	    mdb_report();
+	    flush();
+	    exit(0);
+	  }
+	  */
+
 	  elapsed = time(NULL)-start_time;
 	  if (elapsed != 0) {
 	    printf("    %d files (%d per second)\n",
@@ -206,5 +255,6 @@ void index_directory(const char* dir_name) {
       }
     }
   }
+  closedir(dirp);
 }
 
