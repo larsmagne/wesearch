@@ -2,7 +2,7 @@ GLIB_CFLAGS = @GLIB_CFLAGS@
 GLIB_CONFIG = @GLIB_CONFIG@
 GLIB_LIBS = @GLIB_LIBS@
 
-HEADER_FILES=tokenizer.h config.h util.h mdb.h search.h
+HEADER_FILES=tokenizer.h config.h util.h mdb.h search.h index.h
 
 CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -O3 -Wall -I/usr/local/include
 LDFLAGS+=-L/usr/local/lib -L/usr/lib/news -lgmime -lglib
@@ -17,20 +17,22 @@ daemon.o: daemon.c $(HEADER_FILES)
 
 indexer.o: indexer.c $(HEADER_FILES)
 
+index.o: index.c $(HEADER_FILES)
+
 util.o: util.c $(HEADER_FILES)
 
 searcher.o: searcher.c $(HEADER_FILES)
 
 search.o: search.c $(HEADER_FILES)
 
-indexer: indexer.o mdb.o tokenizer.o  util.o
-	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o
+indexer: indexer.o mdb.o tokenizer.o util.o index.o
+	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o index.o
 
 we-search: searcher.o mdb.o search.o util.o
 	gcc $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o util.o
 
-wed: daemon.o mdb.o util.o
-	gcc $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o
+wed: daemon.o mdb.o util.o index.o
+	gcc $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o index.o
 
 clean:
 	$(RM) indexer *.o
