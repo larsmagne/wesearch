@@ -47,7 +47,7 @@ typedef struct {
   int goodness;
 } search_result;
 
-#define MAX_SEARCH_RESULTS 512
+#define MAX_SEARCH_RESULTS 100
 
 void read_group_table(void);
 void read_next_article_id(void);
