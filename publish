@@ -1,0 +1,16 @@
+#!/bin/bash
+
+version=$1
+
+if [ "$version" = "" ]; then
+    echo "Usage: publish <version>"
+    exit
+fi
+
+cd /tmp
+
+cvs -d /usr/local/cvsroot co gmane/mdb
+
+mv gmane/mdb we-search-$version
+tar czvf we-search-$version.tar.gz we-search-$version
+rm -r we-search-$version
