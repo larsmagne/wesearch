@@ -134,6 +134,12 @@ int index_file(const char *file_name) {
 
       /* Add this article to the list for this group. */
       index_word(group, 1, article_id);
+
+      if (*(doc->address) &&
+	  !strstr(doc->address, "public.gmane.org")) {
+	index_word(doc->address, 1, article_id);
+      }
+
       return doc->num_words;
     }
   } else {
