@@ -21,7 +21,6 @@ int total_files = 0;
 time_t start_time = 0;
 static char *news_spool = NEWS_SPOOL;
 static char *from_file = NULL;
-extern char *index_dir;
 
 void index_article(const char* group, int article) {
   char file_name[MAX_FILE_NAME];
@@ -191,7 +190,7 @@ void index_directory(const char* dir_name) {
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hs:f:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hs:f:i:", long_options, &option_index);
     if (c == -1)
       break;
 
