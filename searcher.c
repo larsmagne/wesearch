@@ -24,10 +24,6 @@ int parse_args(int argc, char **argv) {
       break;
 
     switch (c) {
-    case 's':
-      news_spool = optarg;
-      break;
-      
     case 'h':
       printf ("Usage: we:search [--spool <directory>] <directories ...>\n");
       break;
@@ -43,32 +39,12 @@ int parse_args(int argc, char **argv) {
 int
 main(int argc, char **argv)
 {
-  int dirn;
-  struct stat stat_buf;
+  int opts;
 
-  dirn = parse_args(argc, argv);
+  opts = parse_args(argc, argv);
   
-  start_time = time(NULL);
-
-  /* Initialize key/data structures. */
-  tokenizer_init();
-
   mdb_init();
-
-  for ( ; dirn < argc; dirn++) {
-    
-    if (stat(argv[dirn], &stat_buf) == -1) {
-      perror("tokenizer");
-      break;
-    }
-
-    if (S_ISDIR(stat_buf.st_mode)) 
-      index_directory(argv[dirn]);
-  }
-
-  mdb_report();
-  flush();
-
+  mdb_search(argv + opts);
   exit(0);
 }
 
