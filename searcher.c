@@ -45,6 +45,6 @@ int main(int argc, char **argv) {
   mdb_init();
   tokenizer_init();
 
-  search(argv + opts);
+  search(argv + opts, 1);
   exit(0);
 }
