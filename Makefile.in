@@ -2,18 +2,22 @@ GLIB_CFLAGS = @GLIB_CFLAGS@
 GLIB_CONFIG = @GLIB_CONFIG@
 GLIB_LIBS = @GLIB_LIBS@
 
-CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -I/usr/local/include
+CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -O3 -Wall -I/usr/local/include
 LDFLAGS+=-L/usr/local/lib -lgmime -lglib
 
 all: indexer
 
 tokenizer.o: tokenizer.c tokenizer.h
 
-mdb.o: mdb.c mdb.h config.h
+mdb.o: mdb.c mdb.h config.h tokenizer.h
 
-indexer: indexer.o mdb.o tokenizer.o
+indexer.o: indexer.c indexer.h tokenizer.h
+
+indexer: indexer.o mdb.o tokenizer.o 
 	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o
 
 clean:
 	$(RM) indexer *.o
 
+TAGS: *.h *.c
+	etags *.[ch]

@@ -1,6 +1,12 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+/* Where the index files will be stored. */
+#define INDEX_DIRECTORY "/index/we"
+
+/* The root of the news spool. */
+#define NEWS_SPOOL "/mirror/var/spool/news/articles/"
+
 /* The file where the word entries are stored.  This file will be
    WORD_SLOTS times BLOCK_SIZE big. */
 #define	WORD_FILE "words.db"
@@ -13,6 +19,12 @@
    leaps and bounds when doing indexing, and has a size pretty much
    correlated with the size of the number of documents. */
 #define INSTANCE_FILE "instances.db"
+
+/* The file where some information about articles is stored. */
+#define ARTICLE_FILE "articles.db"
+
+/* The file where some information about groups is stored. */
+#define GROUP_FILE "groups.db"
 
 /* The number of word slots.  Must be a power of two.  This is the
    main factor in determining the size of the memory usage. */
@@ -32,6 +44,11 @@
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
 #define INSTANCE_BUFFER_SIZE (1024*100)
+
+/* This variable says how many distinct words per document we should
+   accept.  Articles with a whole lot of distinct words are usually
+   not very interesting, and may well be bogus. */
+#define MAX_DISTINCT_WORDS 1000
 
 /* To determine how much memory that will be allocated, it's basically:
 
