@@ -2,7 +2,7 @@
 
 $cutoff = $ARGV[0];
 
-open (LAST, "tail -n 300000 /mnt/index/we-14/indexed_files.db|") || die;
+open (LAST, "tail -n 300000 /mnt/index2/we-20/indexed_files.db|") || die;
 while (<LAST>) {
     chop;
     s/\./\//g;
