@@ -27,18 +27,20 @@ index.o: index.c $(HEADER_FILES)
 
 util.o: util.c $(HEADER_FILES)
 
+advise.o: advise.c $(HEADER_FILES)
+
 searcher.o: searcher.c $(HEADER_FILES)
 
 search.o: search.c $(HEADER_FILES)
 
-indexer: indexer.o mdb.o tokenizer.o util.o index.o
-	$(CC) $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o index.o
+indexer: indexer.o mdb.o tokenizer.o util.o index.o advise.o
+	$(CC) $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o index.o advise.o
 
-we-search: searcher.o mdb.o search.o util.o defrag.o
-	$(CC) $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o util.o defrag.o
+we-search: searcher.o mdb.o search.o util.o defrag.o advise.o
+	$(CC) $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o util.o defrag.o advise.o
 
-wed: daemon.o mdb.o util.o index.o
-	$(CC) $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o index.o
+wed: daemon.o mdb.o util.o index.o advise.o
+	$(CC) $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o index.o advise.o
 
 clean:
 	$(RM) indexer *.o
