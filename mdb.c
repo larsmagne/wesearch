@@ -23,12 +23,13 @@
 #define MAX_GROUPS 16000
 #define MAX_INTERNAL_SEARCH_RESULTS 8192
 
-static void *word_table[WORD_SLOTS];
-static void *word_extension_table[WORD_EXTENSION_SLOTS];
+void *word_table[WORD_SLOTS];
+void *word_extension_table[WORD_EXTENSION_SLOTS];
 
 static int instance_table[INSTANCE_TABLE_SIZE];
 static instance_block instance_buffer[INSTANCE_BUFFER_SIZE];
 static int shutting_down_p = 0;
+int instance_buffer_size = INSTANCE_BUFFER_SIZE;
 
 static int num_word_extension_blocks = 1;
 static int current_instance_block_number = 1;
@@ -47,6 +48,7 @@ static int gc_next = 0;
 char *index_dir = INDEX_DIRECTORY;
 int total_single_word_instances = 0;
 static int total_word_instances = 0;
+int ninstance_blocks_read = 0;
 
 #define article_id(id) ((id) & 0xfffffff)
 
@@ -62,11 +64,6 @@ unsigned int count_id(unsigned int spec) {
 }
 #endif
 
-
-void merror(char *error) {
-  perror(error);
-  exit(1);
-}
 
 char *index_file_name(char *name) {
   static char file_name[1024];
@@ -128,15 +125,15 @@ int allocate_extension_block(void) {
    10% of them.  It looks for buffers that haven't been used in 5
    seconds. */
 void free_some_instance_buffers_1(void) {
-  int buffers_to_free = INSTANCE_BUFFER_SIZE / 10;
+  int buffers_to_free = instance_buffer_size / 10;
   time_t now = time(NULL);
   instance_block *ib;
-  int bufferes_freed = 0;
+  int buffers_freed = 0;
 
   printf("Freeing %d buffers\n", buffers_to_free);
 
   while (buffers_to_free > 0) {
-    if (gc_next++ == INSTANCE_BUFFER_SIZE - 1) {
+    if (gc_next++ == instance_buffer_size - 1) {
       gc_next = 0;
       break;
     }
@@ -155,11 +152,11 @@ void free_some_instance_buffers_1(void) {
       bzero(ib->block, BLOCK_SIZE);
       buffers_to_free--;
       allocated_instance_buffers--;
-      bufferes_freed++;
+      buffers_freed++;
     }
   }
 
-  printf("Freed %d buffers.\n", bufferes_freed);
+  printf("Freed %d buffers.\n", buffers_freed);
 
   /* This will kill interactive performance, but we want
      throughput. */
@@ -180,12 +177,12 @@ void free_some_instance_buffers(void) {
 
 /* Find a free in-memory instance buffer. */
 int get_free_instance_buffer(void) {
-  if (allocated_instance_buffers++ == INSTANCE_BUFFER_SIZE - 2)
+  if (allocated_instance_buffers++ == instance_buffer_size - 2)
     free_some_instance_buffers();
 
   while (instance_buffer[next_free_buffer].block_id != 0) {
-    if (next_free_buffer == INSTANCE_BUFFER_SIZE - 2) {
-      fprintf(stderr, "INSTANCE_BUFFER_SIZE wraparound.\n");
+    if (next_free_buffer == instance_buffer_size - 2) {
+      fprintf(stderr, "instance_buffer_size wraparound.\n");
       next_free_buffer = 0;
     }
     next_free_buffer++;
@@ -256,7 +253,7 @@ void swap_instance_block_in(int bn, int block_id) {
 #endif
   
   if (ib->block == NULL) {
-    ib->block = (char*) malloc(BLOCK_SIZE);
+    ib->block = cmalloc(BLOCK_SIZE);
 
     if (ib->block == NULL) {
       perror("chow-indexer");
@@ -264,6 +261,7 @@ void swap_instance_block_in(int bn, int block_id) {
     }
   }
 
+  ninstance_blocks_read++;
   read_into(instance_file, block_id, ib->block, BLOCK_SIZE);
   ib->block_id = block_id;
   ib->dirty = 0;
@@ -357,15 +355,13 @@ int hash(const char *word) {
 /* malloc a new, fresh word block. */
 char *allocate_word_block(const char *word) {
   int slot_number = hash(word);
-  char *block = (char*) malloc(BLOCK_SIZE);
+  char *block = cmalloc(BLOCK_SIZE);
 
   if (block == NULL) {
     perror("chow-indexer");
     exit(1);
   }
 
-  bzero(block, BLOCK_SIZE);
-  
   word_table[slot_number] = block;
   return block;  
 }
@@ -518,14 +514,12 @@ word_descriptor *enter_word(char *word) {
     printf("Allocating an extension block for %s: %d\n",
 	   word, num_word_extension_blocks);
     
-    new_block = (char*) malloc(BLOCK_SIZE);
+    new_block = cmalloc(BLOCK_SIZE);
     
     if (new_block == NULL) {
       perror("chow-indexer");
       exit(1);
     }
-
-    bzero(new_block, BLOCK_SIZE);
 
     allocate_extension_block();
     word_extension_table[num_word_extension_blocks] = new_block;
@@ -689,27 +683,13 @@ int group_id(char *group) {
   if ((gid = (int)g_hash_table_lookup(group_table, (gpointer)group)) == 0) {
     current_group_id++;
     gid = current_group_id;
-    g = (char*)malloc(strlen(group)+1);
+    g = cmalloc(strlen(group)+1);
     strcpy(g, group);
     g_hash_table_insert(group_table, (gpointer)g, (gpointer)gid);
     reverse_group_table[gid] = g;
   }
   
   return gid;
-}
-
-
-/* Write a block to a file. */
-int write_from(int fp, char *buf, int size) {
-  int w = 0, written = 0;
-
-  while (written < size) {
-    if ((w = write(fp, buf + written, size - written)) < 0)
-      merror("Writing a block");
-
-    written += w;
-  }
-  return written;
 }
 
 
@@ -871,7 +851,7 @@ void read_group_table(void) {
     return;
 
   while (fscanf(fp, "%s %d\n", group, &group_id) != EOF) {
-    g = (char*)malloc(strlen(group)+1);
+    g = cmalloc(strlen(group)+1);
     strcpy(g, group);
 #if DEBUG
     printf("Got %s (%d)\n", g, group_id);
@@ -928,7 +908,7 @@ void read_word_table(void) {
 
   for (i = 0; i<WORD_SLOTS; i++) {
     if (block == NULL)
-      block = (char*)malloc(BLOCK_SIZE);
+      block = cmalloc(BLOCK_SIZE);
 
     read_block(word_file, block, BLOCK_SIZE);
     if (get_last_word((short*)block)) {
@@ -963,7 +943,7 @@ void read_word_extension_table(void) {
   
   lseek64(word_extension_file, (loff_t)0, SEEK_SET);
   for (i = 0; i<num_word_extension_blocks; i++) {
-    block = (char*)malloc(BLOCK_SIZE);
+    block = cmalloc(BLOCK_SIZE);
     read_block(word_extension_file, block, BLOCK_SIZE);
     word_extension_table[i] = block;
   }
@@ -1194,9 +1174,10 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     } else {
       if ((wd = lookup_word(si->word)) != NULL) {
 	si->word_id = wd->word_id;
-	if (*wd->head)
+	if (*wd->head) {
 	  si->instance = get_instance_block(*wd->head);
-	else
+	  swap_in_instance_blocks(wd);
+	} else
 	  si->sarticle_id = *wd->tail;
 #if DEBUG
 	printf("Found %s: id %d\n", si->word, si->word_id);
@@ -1342,105 +1323,22 @@ void dump_statistics(void) {
 }
 
 
-/* De-fragment the instance table. */
-
-static int new_instance_block_number = 1;
-static int new_instance_file = 0;
-
-void defragment_word(word_descriptor *wd) {
+/* Swap in all instance blocks for a word. */
+int swap_in_instance_blocks(word_descriptor *wd) {
   instance_block *ib = get_instance_block(*wd->head);
-  int next;
   int nblocks = 0;
+  int next;
 
-  *wd->head = new_instance_block_number;
-
-  while (ib) {
+  while (ib != NULL) {
     nblocks++;
     if ((next = *(int*)(ib->block)) != 0) {
-      new_instance_block_number++;
-      *(int*)(ib->block) = new_instance_block_number;
-      write_from(new_instance_file, ib->block, BLOCK_SIZE);
       ib = get_instance_block(next);
     } else {
-      *wd->tail = new_instance_block_number;
-      new_instance_block_number++;
-      write_from(new_instance_file, ib->block, BLOCK_SIZE);
       ib = NULL;
     }
   }
 
-  if (nblocks != 1)
-    printf("Wrote %d blocks for %s\n", nblocks, wd->word);
-}
-
-int defragment_word_block(char *word_block) {
-  const char *b = word_block + BLOCK_HEADER_SIZE; /* Skip past the header. */
-  const char *word;
-  static word_descriptor dword;
-  int nwords = 0;
-
-  dirty_block(word_block);
-
-  while (TRUE) {
-    if (*b == 0) {
-      /* We have reached the end of the block; check whether it's the
-	 last block. */
-      if (*((int*)word_block) != 0) {
-	/* printf("Going to the next block, %d.\n", *((int*)word_block)); */
-	word_block = word_extension_table[*((int*)word_block)];
-	if (word_block == NULL) {
-	  printf("Went to a non-existing block.\n");
-	  exit(1);
-	}
-	dirty_block(word_block);
-	b = word_block + BLOCK_HEADER_SIZE;
-      } else 
-	return nwords;
-    }
-
-    if (word_block == NULL) {
-      printf("Went to a non-existing block here.\n");
-      exit(1);
-    } 
-
-    nwords++;
-    word = b;
-    while (*b++)
-      ;
-
-    dword.word = word;
-    dword.word_id = *((int*)b);
-    b += 4;
-    dword.head = ((int*)b);
-    b += 4;
-    dword.tail = ((int*)b);
-    b += 4;
-    if (dword.head)
-      defragment_word(&dword);
-  }
+  return nblocks;
 }
 
 
-void defragment_instance_table(void) {
-  int i;
-  char *block;
-  int nwords = 0;
-
-  new_instance_block_number = 1;
-
-  if ((new_instance_file = open64("/opt/tmp/instances.db.tmp",
-				  O_RDWR|O_CREAT|O_TRUNC, 0644)) == -1)
-    merror("Opening the instance file");
-
-  for (i = 0; i<WORD_SLOTS; i++) {
-    if ((block = (char*)word_table[i]) != NULL) {
-      nwords += defragment_word_block(block);
-      if (! (nwords % 100))
-	printf("Total words: %d\n", nwords);
-    }
-  }
-  printf("Total words: %d\n", nwords);
-
-  flush();
-
-}
