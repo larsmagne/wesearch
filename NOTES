@@ -85,16 +85,15 @@ memory at the same time, which sounds like it should be enough.
 
 The in-memory buffering is arranged as follows:
 
-struct buffer_header {
+typedef struct {
   int block_id;
-  bool dirty_p;
-  bool free_p;
-  int word_id;
-  time_t last_used;
+  int dirty;
+  int access_time;
+  int num_used;
   char *block;
-}
+} instance_block;
 
-buffer buffer_headers[512000];
+instance_block instance_buffer[INSTANCE_BUFFER_SIZE];
 
 We'd have a "garbage collector" going in a thread, perhaps, that goes
 through an array of these entries and emptying any buffers that are
