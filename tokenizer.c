@@ -121,7 +121,7 @@ int word_ignore(unsigned char *beg, unsigned char *end) {
   
   for (num_check = beg; num_check<end; num_check++) {
     if (isdigit(*num_check)) {
-      if (num_digits++ > 1)
+      if (num_digits++ > 3)
 	return 1;
     } else if (*num_check < 128)
       has_ascii_p = 1;
@@ -301,7 +301,7 @@ document* parse_file(const char *file_name) {
     table = g_hash_table_new(g_str_hash, g_str_equal);
     bufp = buffer;
     word_table[0].word = NULL;
-    saved_body[0] = 0;
+    bzero(saved_body, MAX_SAVED_BODY_LENGTH);
     saved_body_length = 0;
     author = g_mime_message_get_sender(msg);
     subject = g_mime_message_get_subject(msg);
