@@ -1,11 +1,15 @@
 GLIB_CFLAGS = @GLIB_CFLAGS@
 GLIB_CONFIG = @GLIB_CONFIG@
 GLIB_LIBS = @GLIB_LIBS@
+GMIME_CONFIG = $(X11BASE)/bin/gmime-config
+GMIME_CFLAGS = `$(GMIME_CONFIG) --cflags`
+GMIME_LIBS = `$(GMIME_CONFIG) --libs`
 
 HEADER_FILES=tokenizer.h config.h util.h mdb.h search.h index.h
 
-CPPFLAGS+=-g $(GLIB_CFLAGS) $(GMIME_CFLAGS) -O3 -Wall -I/usr/local/include
-LDFLAGS+=-L/usr/local/lib -L/usr/lib/news -lgmime -lglib
+CPPFLAGS=@CPPFLAGS@ $(GMIME_CFLAGS) -I$(X11BASE)/include
+LDFLAGS=@LDFLAGS@ $(GMIME_LIBS)
+CC = @CC@ $(CPPFLAGS)
 
 all: indexer we-search wed
 
@@ -14,6 +18,8 @@ tokenizer.o: tokenizer.c $(HEADER_FILES)
 mdb.o: mdb.c $(HEADER_FILES)
 
 daemon.o: daemon.c $(HEADER_FILES)
+
+defrag.o: defrag.c $(HEADER_FILES)
 
 indexer.o: indexer.c $(HEADER_FILES)
 
@@ -26,13 +32,13 @@ searcher.o: searcher.c $(HEADER_FILES)
 search.o: search.c $(HEADER_FILES)
 
 indexer: indexer.o mdb.o tokenizer.o util.o index.o
-	gcc $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o index.o
+	$(CC) $(CPPFLAGS) -o indexer $(LDFLAGS) tokenizer.o mdb.o indexer.o util.o index.o
 
-we-search: searcher.o mdb.o search.o util.o
-	gcc $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o util.o
+we-search: searcher.o mdb.o search.o util.o defrag.o
+	$(CC) $(CPPFLAGS) -o we-search $(LDFLAGS) search.o searcher.o mdb.o tokenizer.o util.o defrag.o
 
 wed: daemon.o mdb.o util.o index.o
-	gcc $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o index.o
+	$(CC) $(CPPFLAGS) -o wed $(LDFLAGS) daemon.o mdb.o tokenizer.o search.o util.o index.o
 
 clean:
 	$(RM) indexer *.o
