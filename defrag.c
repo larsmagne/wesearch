@@ -312,13 +312,6 @@ void sort_instance_chain (void) {
   }  
 }
 
-int min (int one, int two) {
-  if (one < two)
-    return one;
-  else
-    return two;
-}
-
 int sort_buffer_less(const void *sr1, const void *sr2) {
   return (supposed_to_be[((instance_sort*)sr1)->id] - 
 	  supposed_to_be[((instance_sort*)sr2)->id]);
