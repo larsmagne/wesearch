@@ -62,6 +62,8 @@ void defragment_instance_table(void);
 int swap_in_instance_blocks(word_descriptor *wd);
 instance_block *get_instance_block(int block_id);
 void dirty_block(char *block);
+void read_indexed_files_table(void);
+char *index_file_name(char *name);
 
 extern char *index_dir;
 extern int total_single_word_instances;
@@ -69,5 +71,7 @@ extern int instance_buffer_size;
 extern void *word_extension_table[];
 extern void *word_table[];
 extern int ninstance_blocks_read;
+extern int current_instance_block_number;
+extern int speculative_readahead;
 
 #endif
