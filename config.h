@@ -55,6 +55,12 @@
 /* If not, uncomment the following. */
 /* #define O_STREAMING    0 */
 
+/* Ignore words longer than this */
+#define MAX_WORD_LENGTH 24
+
+/* Ignore words shorter than this */
+#define MIN_WORD_LENGTH 3
+
 /* To determine how much memory that will be allocated, it's basically:
 
    WORD_SLOTS * BLOCK_SIZE + INSTANCE_BUFFER_SIZE * BLOCK_SIZE
