@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  printf("Accepting (spool %s, index %d)...\n",
+  printf("Accepting (spool %s, index %s)...\n",
 	 news_spool, index_dir);
 
   while (TRUE) {
