@@ -1,6 +1,9 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#if defined(__FreeBSD__)
+#define loff_t off_t
+#endif
 char *mstrcpy(char *dest, char *src);
 char *sstrcpy(char *dest, char *src);
 int is_number(const char *string);

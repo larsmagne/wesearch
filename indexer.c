@@ -3,6 +3,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if defined(__FreeBSD__)
+#  include <sys/mman.h>
+#endif
 #include <fcntl.h>
 #include <getopt.h>
 
@@ -52,10 +55,13 @@ int parse_args(int argc, char **argv) {
 }
 
 void lock_and_uid(void) {
+#if _POSIX_MEMLOCK == 1
+/* Unfortunately, FreeBSD does not implement mlockall - see PR kern/43426 */
   if (mlockall(MCL_FUTURE) == -1) {
     perror("we-index");
     exit(1);
   }
+#endif
 
   setuid(500);
   setgid(500);
