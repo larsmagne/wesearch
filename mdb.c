@@ -21,6 +21,7 @@
 #define DEBUG 0
 #define INSTANCE_BLOCK_LENGTH 255
 #define MAX_GROUPS 16000
+#define MAX_INTERNAL_SEARCH_RESULTS 8192
 
 static void *word_table[WORD_SLOTS];
 static void *word_extension_table[WORD_EXTENSION_SLOTS];
@@ -43,6 +44,7 @@ static GHashTable *group_table = NULL;
 static char *reverse_group_table[MAX_GROUPS];
 static int allocated_instance_buffers = 0;
 static int gc_next = 0;
+char *index_dir = INDEX_DIRECTORY;
 
 void merror(char *error) {
   perror(error);
@@ -51,7 +53,7 @@ void merror(char *error) {
 
 char *index_file_name(char *name) {
   static char file_name[1024];
-  strcpy(file_name, INDEX_DIRECTORY);
+  strcpy(file_name, index_dir);
   strcat(file_name, "/");
   strcat(file_name, name);
   return file_name;
@@ -919,8 +921,14 @@ typedef struct {
   int next;
 } search_item;
 
+typedef struct {
+  int article_id;
+  int goodness;
+} isearch_result;
+
 static search_item search_items[MAX_SEARCH_ITEMS];
 static search_result search_results[MAX_SEARCH_RESULTS];
+static isearch_result isearch_results[MAX_INTERNAL_SEARCH_RESULTS];
 
 /* Function for debugging instance blocks. */
 void dump_instances(instance_block *ib) {
@@ -1069,6 +1077,23 @@ void sort_search_results(search_result *sr, int nresults) {
 }
 
 
+/* Search the preliminary search results according to goodness.  This
+   is used when the number of search results is higher than the number
+   we want to return to the user. */
+int iresult_less(const void *sr1, const void *sr2) {
+  return ((isearch_result*)sr2)->goodness -
+    ((isearch_result*)sr1)->goodness;
+}
+
+int sort_isearch_results(isearch_result *isr, int nresults) {
+  qsort(isr, nresults, sizeof(isearch_result), iresult_less);
+  if (nresults < MAX_SEARCH_RESULTS)
+    return nresults;
+  else
+    return MAX_SEARCH_RESULTS;
+}
+
+
 /* The main search function.  It takes a list of words to search
    for. */
 search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
@@ -1079,6 +1104,8 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
   int max_article_id, aid, sid;
   int matches, goodness;
   int ends = 0, nresults = 0;
+
+  fprintf(fdp, "# Articles: %d\n", current_article_id);
 
   bzero(search_results, MAX_SEARCH_RESULTS * sizeof(search_result));
   for (i = 0; expressions[i]; i++) {
@@ -1097,6 +1124,11 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
 
     if (stop_word_p(si->word)) {
       fprintf(fdp, "# Ignoring: %s\n", si->word);
+    } else if (strlen(si->word) < MIN_WORD_LENGTH) {
+      fprintf(fdp, "# Short: %s\n", si->word);
+    } else if (strlen(si->word) > MAX_WORD_LENGTH &&
+	       !strchr(si->word, '.')) {
+      fprintf(fdp, "# Long: %s\n", si->word);
     } else {
       if ((wd = lookup_word(si->word)) != NULL) {
 	si->word_id = wd->word_id;
@@ -1141,7 +1173,7 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
       if ((si->negate_p == 1 && aid != max_article_id) ||
 	  (si->negate_p == 0 && aid == max_article_id)) {
 	matches++;
-	goodness *= count_id(sid);
+	goodness *= count_id(sid) + 1;
 	if (si->negate_p == 0)
 	  si->next++;
       }
@@ -1150,15 +1182,28 @@ search_result *mdb_search(char **expressions, FILE *fdp, int *nres) {
     }
     
     if (matches == ne && ends != ne) {
-#if DEBUG      
+#if DEBUG
       printf("Found a match: %d, goodness %d\n", max_article_id, goodness);
 #endif
-      if (nresults >= MAX_SEARCH_RESULTS) {
-	fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
+      isearch_results[nresults].article_id = max_article_id;
+      isearch_results[nresults].goodness = goodness;
+
+      if (nresults++ >= MAX_INTERNAL_SEARCH_RESULTS) {
+	fprintf(fdp, "# Internal-max: %d\n", MAX_INTERNAL_SEARCH_RESULTS);
 	break;
       }
-      search_details(max_article_id, goodness, nresults++);
     }
+  }
+
+  if (nresults >= MAX_SEARCH_RESULTS) {
+    fprintf(fdp, "# Internal: %d\n", nresults);
+    fprintf(fdp, "# Max: %d\n", MAX_SEARCH_RESULTS);
+    nresults = sort_isearch_results(isearch_results, nresults);
+  }
+
+  for (i = 0; i<nresults; i++) {
+    search_details(isearch_results[i].article_id, 
+		   isearch_results[i].goodness, i);
   }
 
 #if DEBUG
