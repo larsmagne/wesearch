@@ -83,3 +83,33 @@ void merror(char *error) {
   exit(1);
 }
 
+
+/* Read a block from a file into memory. */
+void read_block(int fd, char *block, int block_size) {
+  int rn = 0, ret;
+  
+  while (rn < block_size) {
+    ret = read(fd, block + rn, block_size - rn);
+    if (ret == 0) {
+      fprintf(stderr, "Reached end of file (block_size: %d).\n", block_size);
+      exit(1);
+    } else if (ret == -1) {
+      printf("Reading into %x\n", (int)block);
+      merror("Reading a block");
+    }
+      
+    rn += ret;
+  }
+}
+
+
+/* Read a block from a file at a specified offset into a in-memory
+   block. */
+void read_into(int fd, int block_id, char *block, int block_size) {
+  if (lseek64(fd, (loff_t)block_id * block_size, SEEK_SET) == -1) {
+    merror("Seeking before reading a block");
+  }
+
+  read_block(fd, block, block_size);
+}
+
