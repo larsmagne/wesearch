@@ -18,16 +18,26 @@
 
 #define MAX_FILE_NAME 1024
 
+static int do_stats = 0;
+
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hs:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hsi:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
+    case 'i':
+      index_dir = optarg;
+      break;
+      
+    case 's':
+      do_stats = 1;
+      break;
+      
     case 'h':
-      printf ("Usage: we-search [--spool <directory>] <directories ...>\n");
+      printf ("Usage: we-search [--index <directory>] <terms ...>\n");
       break;
 
     default:
@@ -44,6 +54,11 @@ int main(int argc, char **argv) {
   
   mdb_init();
   tokenizer_init();
+
+  if (do_stats) {
+    dump_statistics();
+    exit(0);
+  }
 
   search(argv + opts, 1);
   exit(0);
