@@ -14,6 +14,9 @@ void merror(char *error);
 void read_into(int fd, int block_id, char *block, int block_size);
 void read_block(int fd, char *block, int block_size);
 int path_to_article_spec(const char *file_name, char *group, int *article);
+void *crealloc(void *ptr, size_t size, size_t old_size);
+void crfree(void *ptr, int size);
+void mem_usage(void);
 
 extern char *news_spool;
 
