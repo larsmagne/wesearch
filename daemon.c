@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include "search.h"
 #include "mdb.h"
@@ -19,11 +20,41 @@ union sock {
   struct sockaddr_in i;
 };
 
+struct option long_options[] = {
+  {"index", 1, 0, 'i'},
+  {"help", 1, 0, 'h'},
+  {0, 0, 0, 0}
+};
+
 void closedown(int);
 
 #define BUFFER_SIZE 4096
 
 int server_socket = 0;
+
+int parse_args(int argc, char **argv) {
+  int option_index = 0, c;
+  while (1) {
+    c = getopt_long(argc, argv, "hi:", long_options, &option_index);
+    if (c == -1)
+      break;
+
+    switch (c) {
+    case 'i':
+      index_dir = optarg;
+      break;
+      
+    case 'h':
+      printf ("Usage: we:index [--spool <directory>] <directories ...>\n");
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  return optind;
+}
 
 int main(int argc, char **argv) {
   int port = 8010;
@@ -38,6 +69,9 @@ int main(int argc, char **argv) {
   int nitems = 0;
   int i;
   static int so_reuseaddr = TRUE;
+  int dirn;
+
+  dirn = parse_args(argc, argv);
 
   mdb_init();
   tokenizer_init();
