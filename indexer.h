@@ -10,6 +10,7 @@ struct option long_options[] = {
   {"index", 1, 0, 'i'},
   {"from-file", 1, 0, 'f'},
   {"help", 1, 0, 'h'},
+  {"suppress-duplicates", 1, 0, 'd'},
   {0, 0, 0, 0}
 };
 
