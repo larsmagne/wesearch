@@ -20,6 +20,7 @@ int total_unique_words = 0;
 int total_files = 0;
 time_t start_time = 0;
 static char *news_spool = NEWS_SPOOL;
+static char *from_file = NULL;
 
 void index_article(const char* group, int article) {
   char file_name[MAX_FILE_NAME];
@@ -120,6 +121,7 @@ int index_file(const char *file_name) {
   if (path_to_article_spec(file_name, group, &article)) {
 
     doc = parse_file(file_name);
+
     /* We ignore documents that have more than MAX_DISTINCT_WORDS.  They
        are probably bogus. */
     if (doc != NULL && doc->num_words <= MAX_DISTINCT_WORDS) {
@@ -188,13 +190,17 @@ void index_directory(const char* dir_name) {
 int parse_args(int argc, char **argv) {
   int option_index = 0, c;
   while (1) {
-    c = getopt_long(argc, argv, "hs:", long_options, &option_index);
+    c = getopt_long(argc, argv, "hs:f:", long_options, &option_index);
     if (c == -1)
       break;
 
     switch (c) {
     case 's':
       news_spool = optarg;
+      break;
+      
+    case 'f':
+      from_file = optarg;
       break;
       
     case 'h':
@@ -209,12 +215,50 @@ int parse_args(int argc, char **argv) {
   return optind;
 }
 
-int
-main(int argc, char **argv)
+void lock_and_uid(void) {
+  if (mlockall(MCL_FUTURE) == -1) {
+    perror("we-index");
+    exit(1);
+  }
+
+  setuid(500);
+  setgid(500);
+}
+
+void index_from_file(char *from_file) {
+  FILE *fp;
+  char file[MAX_FILE_NAME], *f;
+  time_t elapsed;
+
+  if ((fp = fopen(from_file, "r")) == NULL)
+    return;
+
+  strcpy(file, NEWS_SPOOL);
+  f = file + strlen(file);
+
+  while (fscanf(fp, "%s\n", f) != EOF) {
+    index_file(file);
+    if (! (total_files++ % 1000)) {
+      elapsed = time(NULL)-start_time;
+      if (elapsed != 0) {
+	printf("    %d files (%d per second)\n",
+	       total_files, (int)(total_files/elapsed));
+	printf("    %d instances (%d per second)\n",
+	       instances, (int)(instances/elapsed));
+      }
+    }
+  }
+
+  fclose(fp);
+
+}
+
+int main(int argc, char **argv)
 {
   int dirn;
   struct stat stat_buf;
 
+  lock_and_uid();
   dirn = parse_args(argc, argv);
   
   start_time = time(NULL);
@@ -224,15 +268,21 @@ main(int argc, char **argv)
 
   mdb_init();
 
-  for ( ; dirn < argc; dirn++) {
-    
-    if (stat(argv[dirn], &stat_buf) == -1) {
-      perror("tokenizer");
-      break;
+  if (from_file != NULL) {
+    index_from_file(from_file);
+  } else {
+    for ( ; dirn < argc; dirn++) {
+      
+      if (stat(argv[dirn], &stat_buf) == -1) {
+	perror("tokenizer");
+	break;
+      }
+      
+      if (S_ISDIR(stat_buf.st_mode)) 
+	index_directory(argv[dirn]);
+      else if (S_ISREG(stat_buf.st_mode)) 
+	index_file(argv[dirn]);
     }
-
-    if (S_ISDIR(stat_buf.st_mode)) 
-      index_directory(argv[dirn]);
   }
 
   mdb_report();
