@@ -65,7 +65,8 @@ char *cmalloc(int size) {
   if (b == NULL)
     printf("Failed to allocate %d bytes\n", size);
   mem_used += size;
-  printf("Allocating %fM\n", (float)size/(1024*1024)); 
+  if (size > 1000000)
+    printf("Allocating %fM\n", (float)size/(1024*1024)); 
   bzero(b, size);
   return b;
 }
@@ -185,5 +186,12 @@ int path_to_article_spec(const char *file_name, char *group, int *article) {
   *article = art;
 
   return 1;
+}
+
+int min (int one, int two) {
+  if (one < two)
+    return one;
+  else
+    return two;
 }
 
