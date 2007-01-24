@@ -828,15 +828,16 @@ void flush_group_table(void) {
 
 /* Flush the instance table to disk. */
 void flush_instance_block(instance_block *ib) {
-  if (lseek64(instance_file, (loff_t)ib->block_id * BLOCK_SIZE, SEEK_SET) == -1) 
-    merror("Flushing an instance block");
-
 #if DEBUG
   printf("Flushing instance block %d\n", ib->block_id);
 #endif
 
-  if (ib->dirty)
+  if (ib->dirty) {
+    if (lseek64(instance_file,
+		(loff_t)ib->block_id * BLOCK_SIZE, SEEK_SET) == -1) 
+      merror("Flushing an instance block");
     write_from(instance_file, ib->block, BLOCK_SIZE);
+  }
 
   ib->dirty = 0;
   instance_table[ib->block_id] = 0;
