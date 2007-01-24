@@ -75,13 +75,15 @@ int parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   int wsd;
-  int addlen, peerlen;
+  socklen_t addlen;
+  int peerlen;
   FILE *client;
   time_t now;
   char *s;
   char buffer[BUFFER_SIZE];
   char *expression[MAX_SEARCH_ITEMS];
-  struct sockaddr_in sin, caddr;
+  struct sockaddr_in caddr;
+  struct sockaddr_in sin;
   int nitems = 0;
   static int so_reuseaddr = TRUE;
   int dirn, i;
@@ -130,15 +132,21 @@ int main(int argc, char **argv) {
   while (TRUE) {
     nitems = 0;
     wsd = accept(server_socket, (struct sockaddr*)&caddr, &addlen);
+    if (wsd == -1) {
+      perror("Accepting");
+      exit(-1);
+    }
     peerlen = sizeof(struct sockaddr);
 
     time(&now);
+
+    bzero(buffer, BUFFER_SIZE);
 
     /*
     client = fdopen(wsd, "r+");
     fgets(buffer, BUFFER_SIZE, client);
     */
-    
+
     i = 0;
     while (read(wsd, buffer+i, 1) == 1 &&
 	   *(buffer+i) != '\n' &&
