@@ -93,9 +93,10 @@ int write_from(int fp, char *buf, int size) {
 
   while (written < size) {
     if ((w = write(fp, buf + written, size - written)) < 0) {
+      int err;
       perror("yes...");
-      w = 0;
-      size = 3 / w;
+      err = 0;
+      size = 3 / err;
       merror("Writing a block");
     }
 
