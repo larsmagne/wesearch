@@ -2,7 +2,7 @@
 
 $cutoff = $ARGV[0];
 
-open (LAST, "tail -n 300000 /mnt/index2/we-20/indexed_files.db|") || die;
+open (LAST, "tail -n 300000 /index2/we-21/indexed_files.db|") || die;
 while (<LAST>) {
     chop;
     s/\./\//g;
@@ -10,7 +10,7 @@ while (<LAST>) {
 }
 close LAST;
 
-open (TAIL, "tail -n 300000 -f /tmp/history|") || die;
+open (TAIL, "nc sea 8002|") || die;
 
 $found = 0;
 
