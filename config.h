@@ -5,7 +5,7 @@
 #define INDEX_DIRECTORY "/index/we-work"
 
 /* The root of the news spool. */
-#define NEWS_SPOOL "/mirror/var/spool/news/articles/"
+#define NEWS_SPOOL "/var/spool/news/articles/"
 
 /* The file where the word entries are stored.  This file will be
    WORD_SLOTS times BLOCK_SIZE big. */
@@ -41,7 +41,7 @@
 
 /* The maximum number of instance blocks.  This is kept on disk, and
    should be set to something that is big enough for your data set. */
-#define INSTANCE_TABLE_SIZE (1024*1024*40)
+#define INSTANCE_TABLE_SIZE (1024*1024*80)
 
 /* This is an in-memory buffer of the table above.  The bigger this
    buffer is, the less disk traffic is needed. */
